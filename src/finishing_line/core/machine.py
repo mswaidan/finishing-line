@@ -85,7 +85,7 @@ def step(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepResult:
     # Parts are physically between stations during a train advance, so the
     # sensors legitimately disagree with the controller's map. Checking here
     # would fault on every transfer.
-    if state.phase is not Phase.MOVING:
+    if state.phase != Phase.MOVING:
         mismatch = guards.occupancy_mismatch(state, inputs.sensors)
         if mismatch is not None:
             return _enter_fault(state, mismatch)
@@ -138,7 +138,7 @@ def resume(
     pose" — recovery re-establishes that invariant explicitly rather than
     hoping. Harmless when the robot is already clear.
     """
-    if state.phase is not Phase.FAULTED:
+    if state.phase != Phase.FAULTED:
         return StepResult(state, blocked_by="resume called but machine is not faulted")
 
     occupancy = dict(confirmed_occupancy) if confirmed_occupancy is not None else state.occupancy

@@ -32,11 +32,19 @@ from ..core import machine
 from ..core.model import LineState, PartRole, PartState, Product, Station
 from ..core.schedule import Phase
 from .executor import Executor
+from .persistence import StateStore, as_restored
 from .supervisor import Supervisor, build_sensors
 
 
 class LineController:
-    def __init__(self, supervisor: Supervisor, executor: Executor, *, tick_hz: float = 20.0) -> None:
+    def __init__(
+        self,
+        supervisor: Supervisor,
+        executor: Executor,
+        *,
+        tick_hz: float = 20.0,
+        store: StateStore | None = None,
+    ) -> None:
         self._sup = supervisor
         self._executor = executor
         self._tick_s = 1.0 / tick_hz
@@ -44,8 +52,21 @@ class LineController:
         self._enabled = False
         self._blocked_by: str | None = None
         self._declared = 0  # global arrival counter: drives lead/trail parity
+        self._store = store
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
+
+        # Restore before the first tick. A snapshot with parts on the line
+        # comes back FAULTED (see persistence.as_restored): a restarted
+        # controller's belief is exactly as trustworthy as a faulted one's,
+        # so it goes through the same operator confirm-and-resume flow.
+        if store is not None:
+            loaded = store.load()
+            if loaded is not None:
+                state, declared = loaded
+                self._sup.state = as_restored(state)
+                self._declared = declared
+                self._blocked_by = self._sup.state.fault
 
     # ------------------------------------------------------------------ loop
 
@@ -58,6 +79,9 @@ class LineController:
         self._stop.set()
         if self._thread is not None:
             self._thread.join(timeout=5.0)
+        if self._store is not None:
+            with self._lock:
+                self._store.save(self._sup.state, self._declared)
 
     def _loop(self) -> None:
         last = time.monotonic()
@@ -76,6 +100,12 @@ class LineController:
                     self._blocked_by = result.blocked_by
                 else:
                     self._sup.idle_tick(dt)
+                state, declared = self._sup.state, self._declared
+            # Persist OUTSIDE the lock: a slow disk (this repo lives on a NAS)
+            # must not stall the tick. Structural changes save immediately;
+            # timer-only churn is throttled — its loss on crash errs safe.
+            if self._store is not None:
+                self._store.maybe_save(state, declared)
             time.sleep(self._tick_s)
 
     # -------------------------------------------------------------- commands
@@ -96,7 +126,7 @@ class LineController:
     ) -> tuple[bool, str | None]:
         """§7 recovery. Returns (resumed, reason-if-not)."""
         with self._lock:
-            if self._sup.state.phase is not Phase.FAULTED:
+            if self._sup.state.phase != Phase.FAULTED:
                 return False, "machine is not faulted"
             occupancy = (
                 {Station[k.upper()]: v for k, v in confirmed_occupancy.items()}
@@ -111,7 +141,7 @@ class LineController:
                 self._sup.state, sensors, confirmed_occupancy=occupancy, beat=beat
             )
             self._sup.state = result.state
-            if result.state.phase is Phase.FAULTED:
+            if result.state.phase == Phase.FAULTED:
                 return False, result.blocked_by
             # Order matters: reset clears the executor's fault latch, THEN the
             # re-home intent resume emitted (MoveToSafePose) gets queued.

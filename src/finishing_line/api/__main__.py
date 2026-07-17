@@ -55,6 +55,11 @@ def main() -> None:
     mode.add_argument("--sim", action="store_true", help="fully simulated line")
     mode.add_argument("--cc", metavar="HOST", help="real ClearCore, fake robot")
     ap.add_argument("--port", type=int, default=8000)
+    ap.add_argument(
+        "--state-file", default="var/line-state.json",
+        help="snapshot path; parts on the line survive a restart via the "
+             "confirm-and-resume flow (default: %(default)s)",
+    )
     args = ap.parse_args()
 
     cfg = load_process_config()
@@ -67,9 +72,15 @@ def main() -> None:
         robot = FakeRobot(work_s=5.0, spray_s=5.0)
         print(f"conveyor commissioning: real ClearCore at {args.cc}, FAKE robot")
 
+    from ..process.persistence import StateStore
+
     executor = Executor(cc, robot, TrainMover(cc))
     supervisor = Supervisor(cc=cc, robot=robot, executor=executor, cfg=cfg, state=LineState())
-    controller = LineController(supervisor, executor).start()
+    store = StateStore(args.state_file)
+    controller = LineController(supervisor, executor, store=store).start()
+    if supervisor.state.fault is not None:
+        print(f"RESTORED with parts on the line: {supervisor.state.fault}")
+        print("Use the HMI fault panel to confirm occupancy and resume.")
 
     if physics is not None:
         # In sim mode, a declared batch must also appear on the fake infeed —
