@@ -71,14 +71,16 @@ enum NewReg : uint16_t {
   REG_IF_PRESENT = 403,        // discrete
   REG_S_PRESENT = 404,         // discrete
   REG_FD_PRESENT = 405,        // discrete
-  REG_INQ_COUNT = 406,         // TODO: no queue-count sensor exists yet; serves 0
+  REG_INQ_COUNT = 406,         // no count sensor; see INQ_PRESENT (409)
   REG_HANDOFF_TO_Z2 = 407,     // discrete
   REG_HANDOFF_TO_Z1 = 408,     // discrete
+  REG_INQ_PRESENT = 409,       // discrete: queue-head eye
   REG_ZONE1_STATE = 410,       // 0 not ready, 1 ready, 2 moving
   REG_ZONE2_STATE = 411,
   REG_WATCHDOG_TRIPPED = 412,
   REG_ZONE1_REQID_ACK = 413,   // last RECOGNISED request id (the move is running)
   REG_ZONE2_REQID_ACK = 414,
+  REG_OUT_PRESENT = 415,       // discrete: outfeed occupancy eye
 };
 
 // Zone motion modes (legacy vocabulary + sensor-stop).

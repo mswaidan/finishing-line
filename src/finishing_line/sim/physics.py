@@ -60,6 +60,10 @@ class PhysicsSim:
     #: Which stations physically hold a part. INQ is a count, not a slot.
     occupied: set[Station] = field(default_factory=set)
     outfed: int = 0
+    #: How long a finished part sits at OUT before the imaginary operator
+    #: removes it (drives the OUT_PRESENT eye and its outfeed block).
+    out_dwell_s: float = 0.5
+    _out_clear_at: float | None = None
 
     _accum: float = 0.0
     #: (deadline, arrivals) during the inter-part gap; arrivals are
@@ -113,6 +117,14 @@ class PhysicsSim:
         return running, bool(direction)
 
     def _tick(self, dt: float) -> None:
+        # Publish unconditionally: inq_count changes from OUTSIDE (batch
+        # declarations) while belts are stopped, and an event-only publish
+        # would leave the INQ eye stale — blocking the very feed move that
+        # would create the next event.
+        if self._out_clear_at is not None and time.monotonic() >= self._out_clear_at:
+            self._out_clear_at = None
+        self._publish()
+
         # Phase B first: complete an in-flight shift when the gap has passed.
         # Arrivals land even if a belt already stopped (a part that crossed
         # its stop sensor coasts the last distance) — matching a real stop.
@@ -123,6 +135,8 @@ class PhysicsSim:
             for dest, zones in arrivals:
                 if dest is Station.OUT:
                     self.outfed += 1
+                    # The part occupies the outfeed until "removed" (dwell).
+                    self._out_clear_at = time.monotonic() + self.out_dwell_s
                     continue
                 self.occupied.add(dest)
                 if zones == (1, 2):  # crossing completed: raise the handoff
@@ -191,4 +205,6 @@ class PhysicsSim:
         self.fake.set_input(New.IF_PRESENT, int(Station.IF in self.occupied))
         self.fake.set_input(New.S_PRESENT, int(Station.S in self.occupied))
         self.fake.set_input(New.FD_PRESENT, int(Station.FD in self.occupied))
+        self.fake.set_input(New.INQ_PRESENT, int(self.inq_count > 0))
+        self.fake.set_input(New.OUT_PRESENT, int(self._out_clear_at is not None))
         self.fake.set_input(New.INQ_COUNT, self.inq_count, table="input")

@@ -71,6 +71,31 @@ def test_zone_motion_blocks_an_under_flashed_part_leaving_a_fan(cfg):
     assert zone_motion_blocked(ready, _sensors(), cfg, MOVE_IF_TO_S) is None
 
 
+def test_feed_blocked_when_queue_head_eye_is_empty(cfg):
+    """Declared parts but nothing physically staged: block with a reason the
+    operator can act on, don't run belts into a timeout fault.
+    """
+    state = LineState(inq_queue=("p9",))
+    sensors = _sensors(occupied=frozenset(), inq_present=False)
+    blocked = zone_motion_blocked(state, sensors, cfg, ((Station.INQ, Station.IF),))
+    assert blocked and "load parts" in blocked
+
+    staged_sensors = _sensors(occupied=frozenset(), inq_present=True)
+    assert zone_motion_blocked(state, staged_sensors, cfg, ((Station.INQ, Station.IF),)) is None
+
+
+def test_outfeed_blocked_while_finished_part_awaits_removal(cfg):
+    """Never push a cube into a cube: the OUT eye holds the outfeed move."""
+    part = make_part("p1", PartRole.LEAD, coats_applied=2, flash_1_s=180.0, flash_2_s=180.0)
+    state = LineState(parts={"p1": part}, occupancy={Station.FD: "p1"})
+    sensors = _sensors(occupied=frozenset({Station.FD}), out_present=True)
+    blocked = zone_motion_blocked(state, sensors, cfg, ((Station.FD, Station.OUT),))
+    assert blocked and "remove the finished part" in blocked
+
+    cleared = _sensors(occupied=frozenset({Station.FD}), out_present=False)
+    assert zone_motion_blocked(state, cleared, cfg, ((Station.FD, Station.OUT),)) is None
+
+
 def test_outfeed_destination_is_never_considered_occupied(cfg):
     """OUT is offload — it always accepts a part."""
     part = make_part("p1", PartRole.LEAD, coats_applied=2, flash_2_s=180.0)

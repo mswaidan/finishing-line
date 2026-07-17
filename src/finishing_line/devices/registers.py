@@ -109,6 +109,12 @@ class New(IntEnum):
     # One per direction.
     HANDOFF_TO_Z2 = 407   # part has fully entered zone 2 (downstream crossing)
     HANDOFF_TO_Z1 = 408   # part has fully entered zone 1 (the P2->P3 retreat)
+    #: Queue-head eye: a part is staged at the front of the INQ feed. Feed
+    #: moves are BLOCKED (not faulted) while this reads empty.
+    INQ_PRESENT = 409
+    #: Outfeed occupancy eye: a finished part awaits removal at OUT. Outfeed
+    #: moves are BLOCKED while set — never push a cube into a cube.
+    OUT_PRESENT = 415
 
     # Zone motion. Distance is UNSIGNED steps; sign travels on the direction
     # coil, exactly like the legacy conveyor block.

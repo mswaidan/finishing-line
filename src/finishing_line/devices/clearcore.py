@@ -99,6 +99,8 @@ class ClearCoreInputs:
     fd_present: bool
     handoff_to_z1: bool
     handoff_to_z2: bool
+    inq_present: bool
+    out_present: bool
     inq_count: int
     shutter: ShutterState
     if_fan_on: bool
@@ -301,6 +303,8 @@ class ClearCoreClient:
             fd_present=self._read_discrete(New.FD_PRESENT),
             handoff_to_z1=self._read_discrete(New.HANDOFF_TO_Z1),
             handoff_to_z2=self._read_discrete(New.HANDOFF_TO_Z2),
+            inq_present=self._read_discrete(New.INQ_PRESENT),
+            out_present=self._read_discrete(New.OUT_PRESENT),
             inq_count=self._read_register(New.INQ_COUNT),
             shutter=self.shutter_state(),
             if_fan_on=self.fan_on(Station.IF),

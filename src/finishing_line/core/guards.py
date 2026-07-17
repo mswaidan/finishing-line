@@ -42,6 +42,13 @@ def departure_blocked(
     if sensors.gun_on:
         return "spray gun still live"
 
+    # Physical end-of-line conditions, both BLOCKS rather than faults: the
+    # operator fixes them by loading or unloading parts, no recovery needed.
+    if (Station.INQ, Station.IF) in moves and not sensors.inq_present:
+        return "queue head empty — load parts at INQ"
+    if (Station.FD, Station.OUT) in moves and sensors.out_present:
+        return "outfeed occupied — remove the finished part at OUT"
+
     # The train advances as a unit, so a destination counts as free if an
     # earlier move in this transition vacates it. Checking each move against
     # the static sensor snapshot would block IF->S / INQ->IF on the very part

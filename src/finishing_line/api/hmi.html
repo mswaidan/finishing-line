@@ -121,7 +121,9 @@ function render(s){
     if (st === "INQ")
       inner = s.inq_queue.map(id => `<div class="part"><b>${id}</b><div class="meta">queued</div></div>`).join("");
     else if (st === "OUT")
-      inner = `<div class="meta" style="margin-top:8px">done parts exit here</div>`;
+      inner = s.clearcore.sensors?.OUT
+        ? `<div class="part"><b>finished part</b><div class="meta wet">REMOVE PART</div></div>`
+        : `<div class="meta" style="margin-top:8px">done parts exit here</div>`;
     else {
       const pid = s.occupancy[st];
       if (pid && s.parts[pid]) inner = partCard(pid, s.parts[pid], target);

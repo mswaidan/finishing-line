@@ -163,6 +163,11 @@ class SensorSnapshot:
     robot_clear: bool = False
     gun_on: bool = False
     inq_count: int = 0
+    #: Queue-head eye: a part physically staged at the front of INQ. Defaults
+    #: True so states built without modelling the feed don't block feeds.
+    inq_present: bool = True
+    #: Outfeed eye: a finished part awaits removal at OUT.
+    out_present: bool = False
 
     def fan_state(self, station: Station) -> FanState:
         if station is Station.IF:

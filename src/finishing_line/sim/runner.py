@@ -147,6 +147,8 @@ class FakeLine:
             robot_clear=self.robot_clear,
             gun_on=self.gun_on,
             inq_count=inq_count,
+            inq_present=inq_count > 0,
+            out_present=False,  # FakeLine models an always-cleared outfeed
         )
 
 

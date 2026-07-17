@@ -42,6 +42,7 @@ struct Debounced {
 };
 
 Debounced dbIf, dbS, dbFd, dbHandZ1, dbHandZ2, dbShutOpen, dbShutClosed;
+Debounced dbInq, dbOut;
 
 // ------------------------------------------------------------------ zones
 struct ZoneBlock {
@@ -189,7 +190,7 @@ void firmwareSetup() {
   // Motors: open-loop step/dir, legacy clocking and polarity (ino:192-207).
   MotorMgr.MotorInputClocking(MotorManager::CLOCK_RATE_LOW);
   MotorMgr.MotorModeSet(MotorManager::MOTOR_ALL, Connector::CPM_MODE_STEP_AND_DIR);
-  MotorDriver *motors[] = {&MOTOR_ZONE1, &MOTOR_ZONE2, &MOTOR_FEED};
+  MotorDriver *motors[] = {&MOTOR_ZONE1, &MOTOR_ZONE2, &MOTOR_FEED, &MOTOR_BRUSH};
   for (MotorDriver *m : motors) {
     m->VelMax(DEFAULT_VELOCITY_SPS);
     m->AccelMax(DEFAULT_ACCEL_SPS2);
@@ -197,17 +198,22 @@ void firmwareSetup() {
     m->PolarityInvertSDDirection(INVERT_STEP_DIRECTION);
     m->EnableRequest(true);
   }
+  MOTOR_BRUSH.VelMax(BRUSH_VELOCITY_SPS);
+  MOTOR_BRUSH.AccelMax(BRUSH_ACCEL_SPS2);
 
   PIN_IF_PRESENT.Mode(Connector::INPUT_DIGITAL);
   PIN_S_PRESENT.Mode(Connector::INPUT_DIGITAL);
   PIN_FD_PRESENT.Mode(Connector::INPUT_DIGITAL);
   PIN_HANDOFF_TO_Z2.Mode(Connector::INPUT_DIGITAL);
   PIN_HANDOFF_TO_Z1.Mode(Connector::INPUT_DIGITAL);
+  PIN_INQ_PRESENT.Mode(Connector::INPUT_DIGITAL);
+  PIN_OUT_PRESENT.Mode(Connector::INPUT_DIGITAL);
   PIN_SHUTTER_OPEN_SW.Mode(Connector::INPUT_DIGITAL);
   PIN_SHUTTER_CLOSED_SW.Mode(Connector::INPUT_DIGITAL);
   PIN_IF_FAN.Mode(Connector::OUTPUT_DIGITAL);
   PIN_FD_FAN.Mode(Connector::OUTPUT_DIGITAL);
-  PIN_SHUTTER_SOLENOID.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_SHUTTER_OPEN_SOL.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_SHUTTER_CLOSE_SOL.Mode(Connector::OUTPUT_DIGITAL);
 
   // Static IP — see io_map.h for why DHCP is deliberately gone.
   IPAddress ip(CC_IP_ADDRESS);
@@ -237,6 +243,8 @@ void firmwareLoop() {
   regs.discrete[REG_FD_PRESENT] = dbFd.update(PIN_FD_PRESENT.State(), nowMs);
   regs.discrete[REG_HANDOFF_TO_Z1] = dbHandZ1.update(PIN_HANDOFF_TO_Z1.State(), nowMs);
   regs.discrete[REG_HANDOFF_TO_Z2] = dbHandZ2.update(PIN_HANDOFF_TO_Z2.State(), nowMs);
+  regs.discrete[REG_INQ_PRESENT] = dbInq.update(PIN_INQ_PRESENT.State(), nowMs);
+  regs.discrete[REG_OUT_PRESENT] = dbOut.update(PIN_OUT_PRESENT.State(), nowMs);
   bool shutOpen = dbShutOpen.update(PIN_SHUTTER_OPEN_SW.State(), nowMs);
   bool shutClosed = dbShutClosed.update(PIN_SHUTTER_CLOSED_SW.State(), nowMs);
 
@@ -276,10 +284,13 @@ void firmwareLoop() {
   regs.inputRegs[REG_IF_FAN_FEEDBACK] = ifFan ? 1 : 0;
   regs.inputRegs[REG_FD_FAN_FEEDBACK] = fdFan ? 1 : 0;
 
-  // ---- shutter: solenoid out, REAL end switches back. Feedback is sensed
-  // position, never an echo — zone motion gates on it. Watchdog holds state
-  // (§7: shutter holds on fault), so the solenoid is NOT forced either way.
-  PIN_SHUTTER_SOLENOID.State(regs.holding[REG_SHUTTER_CMD] != 0);
+  // ---- shutter: double-solenoid 5/2 detented valve — the commanded side is
+  // energised continuously, the opposite side off; de-energised it HOLDS
+  // position (§7: shutter holds state on fault, through power loss included).
+  // Feedback is the REAL end switches, never an echo — zone motion gates on it.
+  bool wantOpen = regs.holding[REG_SHUTTER_CMD] != 0;
+  PIN_SHUTTER_OPEN_SOL.State(wantOpen);
+  PIN_SHUTTER_CLOSE_SOL.State(!wantOpen);
   if (shutOpen && !shutClosed) {
     regs.inputRegs[REG_SHUTTER_FEEDBACK] = 1;
   } else if (shutClosed && !shutOpen) {
@@ -299,5 +310,12 @@ void firmwareLoop() {
     MOTOR_FEED.MoveVelocity(velocityLimit());
   } else {
     MOTOR_FEED.MoveStopDecel();
+  }
+
+  // ---- brush (legacy M2-role, now M3; legacy coil + tuned velocity).
+  if (!tripped && regs.coils[CMD_BRUSH_ON]) {
+    MOTOR_BRUSH.MoveVelocity(BRUSH_VELOCITY_SPS);
+  } else {
+    MOTOR_BRUSH.MoveStopDecel();
   }
 }

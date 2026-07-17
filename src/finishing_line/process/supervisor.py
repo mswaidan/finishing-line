@@ -51,6 +51,8 @@ def build_sensors(cc: ClearCoreInputs, robot_clear: bool, gun_on: bool) -> Senso
         robot_clear=robot_clear,
         gun_on=gun_on,
         inq_count=cc.inq_count,
+        inq_present=cc.inq_present,
+        out_present=cc.out_present,
     )
 
 

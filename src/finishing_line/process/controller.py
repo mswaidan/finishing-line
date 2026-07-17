@@ -189,6 +189,7 @@ class LineController:
                     "fans": {"IF": cc.if_fan_on, "FD": cc.fd_fan_on},
                     "sensors": {
                         "IF": cc.if_present, "S": cc.s_present, "FD": cc.fd_present,
+                        "INQ": cc.inq_present, "OUT": cc.out_present,
                         "inq_count": cc.inq_count,
                     },
                     "watchdog_tripped": cc.watchdog_tripped,
