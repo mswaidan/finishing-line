@@ -1,8 +1,0 @@
- Program
-   BeforeStart
-     water≔0.5
-     Script: my_cost.script
-   Robot Program
-     quantity≔'What is the quantity?'
-     cost≔my_cost(water,quantity)
-     Popup

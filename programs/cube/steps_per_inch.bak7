@@ -1,9 +1,0 @@
-def Inches_To_Steps(distance):
-teeth = 28
-pitch = 5
-degreesPerStep = 1.8
-microsteps = 8
-microStepsPerInch = teeth/pitch
-return floor(distance * microStepsPerInch)
-
-end

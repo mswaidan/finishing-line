@@ -1,4 +1,0 @@
-def Move_Continuous(direction):
-  mm_old = modbus_get_signal_status("MOTION_MODE_LOC")
-  dir_old = modbus_get_signal_status("DIRECTION_LOCAL")
-end

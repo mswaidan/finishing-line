@@ -7,3 +7,14 @@ __pycache__/
 
 # Claude Code local settings (per-machine permission grants)
 .claude/settings.local.json
+
+# Legacy Polyscope program library: a bulk NAS copy, not project source.
+# Tracked exceptions: the two archaeology sources that cell-config.yaml's
+# line references (script:NNN) resolve against, and the usbdisk salvage
+# whose only remaining copy is here.
+programs/*
+!programs/modbustest.script
+!programs/modbustest.txt
+!programs/archive/
+programs/archive/*
+!programs/archive/usbdisk-unique/

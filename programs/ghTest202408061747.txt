@@ -1,3 +1,0 @@
- Program
-   Robot Program
-     Script: ghTest202408061747.script

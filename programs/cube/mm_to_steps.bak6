@@ -1,8 +1,0 @@
-def mm_to_steps(distance):
-teeth = 28
-pitch = 2
-degreesPerStep = 1.8
-microsteps = 4
-microStepsPerMm = 360 / teeth  / degreesPerStep / pitch * microsteps
-return floor(distance * microStepsPerMm)
-end

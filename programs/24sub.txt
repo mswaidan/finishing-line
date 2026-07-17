@@ -1,4 +1,0 @@
- Program
-   Robot Program
-     MoveJ
-       Waypoint_13

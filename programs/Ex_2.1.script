@@ -1,3 +1,0 @@
-def my_cost(water,quantity)
-cost = water * quantity
-return cost

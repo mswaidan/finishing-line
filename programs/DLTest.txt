@@ -1,5 +1,0 @@
- Program
-   Init Variables
-   Robot Program
-     Impact Inspection
-     Wait: 2.0

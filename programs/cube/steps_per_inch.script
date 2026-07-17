@@ -1,4 +1,0 @@
-def Inches_To_Steps(distance):
-mm = distance*25.4
-return mm_to_steps(mm)
-end

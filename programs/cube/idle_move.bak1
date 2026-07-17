@@ -1,7 +1,0 @@
-def Move_Idle():
-  modbus_set_output_signal("ROBOT_SENDING", True, False)
-  Set_Motion_Mode("idle")
-  Set_Request_Id()
-  sleep(.05)
-  modbus_set_output_signal("ROBOT_SENDING", False, False)
-end

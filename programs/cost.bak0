@@ -1,5 +1,0 @@
-my_cost(drink,quantity):
-my_drink[water,lemonade,cola,beer]
-result=drink*quantity
-return result
-end

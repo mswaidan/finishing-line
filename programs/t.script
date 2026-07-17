@@ -1,4 +1,0 @@
-def price (quantity,price):
-total=quantity*price
-return total
-end

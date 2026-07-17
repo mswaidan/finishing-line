@@ -1,5 +1,0 @@
-def Move_Idle():
-  Set_Motion_Mode("idle")
-  Set_Request_Id()
-  sleep(.2)
-end

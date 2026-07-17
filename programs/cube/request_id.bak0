@@ -1,4 +1,0 @@
-def Set_Request_Id():
-id = floor(random()*65000)
-modbus_set_output_register("REQUEST_ID", id, False)
-end
