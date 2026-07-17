@@ -15,13 +15,21 @@ from ..config.loader import ProcessConfig
 from .model import FAN_STATIONS, FanState, LineState, PartState
 
 
-def advance_flash_timers(state: LineState, dt: float) -> dict[str, PartState]:
+def advance_flash_timers(state: LineState, dt: float, cfg: ProcessConfig) -> dict[str, PartState]:
     """Return `state.parts` with flash timers advanced by `dt` seconds.
 
     Only parts standing at a fan station whose fan is ON accumulate time. A part
     at IF while the IF fan is paused mid-spray-burst banks nothing — that is the
     whole point.
+
+    Wetness clears HERE, the moment the active flash completes — not when the
+    part later moves. Wet means "coated and flash incomplete"; tying it to
+    movement left fully-flashed parts tagged wet until the next transition,
+    which both misled the HMI and kept the §7 IF-fan pause armed for a part
+    that was already dry.
     """
+    from dataclasses import replace
+
     parts = dict(state.parts)
     for station in FAN_STATIONS:
         if state.fan_state(station) is not FanState.ON:
@@ -34,7 +42,10 @@ def advance_flash_timers(state: LineState, dt: float) -> dict[str, PartState]:
         # skip its real flash 1 later, having already 'served' 180 s dry.
         if part.coats_applied == 0:
             continue
-        parts[part.part_id] = part.with_flash_advanced(dt)
+        advanced = part.with_flash_advanced(dt)
+        if advanced.is_wet and flash_complete(advanced, cfg):
+            advanced = replace(advanced, is_wet=False)
+        parts[part.part_id] = advanced
     return parts
 
 

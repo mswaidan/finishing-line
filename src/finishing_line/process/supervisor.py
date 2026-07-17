@@ -124,7 +124,7 @@ class Supervisor:
             if_fan=FanState.ON if cc_inputs.if_fan_on else FanState.OFF,
             fd_fan=FanState.ON if cc_inputs.fd_fan_on else FanState.OFF,
         )
-        self.state = replace(state, parts=advance_flash_timers(state, dt))
+        self.state = replace(state, parts=advance_flash_timers(state, dt, self.cfg))
         self.cc.heartbeat()
 
     def run(self, *, until, timeout_s: float) -> StepResult:

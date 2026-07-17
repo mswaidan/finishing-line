@@ -73,7 +73,7 @@ def step(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepResult:
     would make a part that flashed for 400 s look under-flashed and force a
     needless rework.
     """
-    state = replace(state, parts=timers.advance_flash_timers(state, inputs.dt))
+    state = replace(state, parts=timers.advance_flash_timers(state, inputs.dt, cfg))
     state = replace(state, pending=tuple(p for p in state.pending if p not in inputs.completed))
 
     if inputs.fault is not None:
@@ -234,6 +234,13 @@ def _robot_work(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepRes
     """
     spec = SCHEDULE[state.beat]
     part = state.part_at(Station.S)
+
+    # A completely empty line HOLDS here rather than cycling beats. Empty-slot
+    # beats satisfy every guard trivially, so without this the machine would
+    # spin P1..P4 forever, cycling the physical shutter over nothing. Startup
+    # and drain still flow: any part anywhere (or queued) resumes the pattern.
+    if not state.occupancy and not state.inq_queue:
+        return StepResult(state, blocked_by="line empty — declare a batch to begin")
 
     if part is None:
         return StepResult(replace(state, phase=Phase.AWAIT_GUARDS))
@@ -408,11 +415,8 @@ def _apply_moves(state: LineState, moves: tuple[tuple[Station, Station], ...]) -
             continue
 
         occupancy[dst] = part_id
-
-        # A part arriving at a fan is done being wet once it flashes; a part
-        # leaving one has, by the guard above, already banked its full flash.
-        if src in (Station.IF, Station.FD) and part_id in parts:
-            parts[part_id] = replace(parts[part_id], is_wet=False)
+        # (Wetness is NOT cleared here: it clears in advance_flash_timers the
+        # moment the active flash completes. Movement says nothing about dry.)
 
     return replace(state, occupancy=occupancy, inq_queue=inq_queue, parts=parts)
 

@@ -57,6 +57,28 @@ def test_single_part_batch(cfg):
     assert result.state.fault is None
 
 
+def test_empty_line_holds_instead_of_cycling_beats(cfg):
+    """After drain (or before the first batch) the machine must HOLD, not spin
+    P1..P4 forever — every empty beat would cycle the physical shutter over
+    nothing. The hold reason surfaces so the HMI can say what to do next.
+    """
+    from finishing_line.core.machine import Inputs, step
+    from finishing_line.core.model import LineState, SensorSnapshot, ShutterState
+
+    state = LineState()
+    sensors = SensorSnapshot(shutter=ShutterState.CLOSED, robot_clear=True)
+
+    results = [step(state, Inputs(dt=1.0, sensors=sensors), cfg)]
+    for _ in range(10):
+        results.append(step(results[-1].state, Inputs(dt=1.0, sensors=sensors), cfg))
+
+    final = results[-1]
+    assert final.state.beat == "P1", "beat advanced on an empty line"
+    assert final.state.phase == Phase.ROBOT_WORK
+    assert not any(r.intents for r in results), "an empty line must not actuate anything"
+    assert "declare a batch" in final.blocked_by
+
+
 def test_soak_a_production_run(cfg):
     """Time-compressed soak: 20 parts straight through on a shortened flash.
 
