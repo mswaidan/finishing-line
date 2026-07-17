@@ -64,15 +64,19 @@ truth comes from the two end switches (register 400: 0 closed / 1 open /
   cabinet's digital outputs (DO3 / DO5), as in the legacy program.
 - Safety (e-stops, UR safety config) stays in hardware, outside the ClearCore.
 
-## Sensor selection (decided 2026-07-17)
+## Sensor selection (decided 2026-07-17, revised same day for availability)
 
-All presence/handoff/INQ/OUT eyes: **AutomationDirect FDM3-0N-1H** ($41 as of
-2026-07) — the M12 quick-disconnect variant of the FDM3-0N-1A already proven
-on this line (identical optics/price; the -1A/-1H suffix is pigtail vs QD).
-12 mm metal tubular, 100 mm diffuse IR, NPN, light-on/dark-on selectable,
-1 kHz. The budget alternative (plastic F18I2-0N-0E, $37) saves only $4/unit —
-not worth re-qualifying a different optic when trigger repeatability is the
-line's positioning truth. Buy 9 + 2 spares + M12 cordsets.
+All presence/handoff/INQ/OUT eyes: **AutomationDirect F18I2-0N-0E** ($37 as
+of 2026-07, in stock) — 18 mm plastic tubular, 100 mm diffuse IR, NPN,
+light-on/dark-on selectable, 500 Hz, native 4-pin M12 quick-disconnect.
+Buy 9 + 2 spares + M12 cordsets.
+
+First choice was FDM3-0N-1H (the M12 variant of the FDM3-0N-1A proven on the
+legacy line — same optics, $41) but it was backordered to 2026-09. Both parts
+are 4-pin M12 / NPN / 100 mm diffuse and electrically interchangeable, so any
+position that proves marginal in dust or mist can be swapped to an FDM3-0N-1H
+later as a two-minute experiment. Bench bring-up qualifies the F18's trigger
+behaviour as part of the normal io_map walk + sensor-stop hand-trip tests.
 
 ## Shopping list deltas vs today's line
 
