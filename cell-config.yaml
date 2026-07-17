@@ -24,12 +24,15 @@ meta:
 # Network
 # -----------------------------------------------------------------------------
 network:
+  ur5e:
+    ip: 192.168.1.32               # legacy HMI server.js — dashboard :29999, RTDE :30004
   clearcore:
     modbus_host: 192.168.1.18      # script:20 — address the robot actually talks to
     static_ip_fallback: 192.168.1.17  # ino:28 — unused while use_dhcp=true (see discrepancies)
     use_dhcp: true                 # ino:26
     mac: "DE:AD:BE:EF:FE:EE"       # ino:27
     raw_tcp_port: 8888             # ino:21 — side channel for "go"/"stop"/job-number strings
+                                   # (used by the legacy HMI, which targeted .17 — see discrepancies)
   modbus:
     slave_id: 255                  # script:20
     hreg_offset_unused: 512        # ino:23 — declared, never referenced
@@ -351,7 +354,11 @@ discrepancies:
       the ClearCore at 192.168.1.18 (script:20). Harmless today because
       usingDhcp=true (ino:26) means the static address is never applied, and DHCP
       evidently hands out .18. If DHCP is ever turned off, or the lease changes,
-      every modbus signal silently stops resolving.
+      every modbus signal silently stops resolving. Deepening the confusion, the
+      legacy HMI (robot-gui, scrapped 2026-07-17; source on GitHub) sent its
+      port-8888 go/stop/job commands to .17 — so the two clients addressed the
+      same device at different IPs, and at most one of them was actually
+      working. Pin the ClearCore to a static address during the rewrite.
 
   - id: spray-45-missing-inset
     severity: medium
@@ -381,8 +388,10 @@ discrepancies:
     summary: >
       read_job() handles JOB 7 (310x325x125) and the program has a dedicated
       JOB==7 feed loop (script:2315) and spray approach height (script:2894), but
-      the job-number comment (script:2122) only documents jobs 1-6. Job 7 is
-      unnamed here pending confirmation of what part it is.
+      the job-number comment (script:2122) only documents jobs 1-6. The legacy
+      HMI's job picker also had buttons for jobs 1-6 only (Cube, Browser, 45,
+      Stereocab 2/3/4) — job 7 was reachable solely by sending a raw job number
+      over port 8888. Unnamed pending confirmation of what part it is.
 
   - id: position-move-arg-ignored
     severity: low
