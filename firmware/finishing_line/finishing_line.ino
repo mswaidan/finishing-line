@@ -1,0 +1,12 @@
+// Finishing line ClearCore firmware — Arduino entry shim.
+//
+// All real code lives in the .h/.cpp files beside this sketch; this file
+// exists so the Arduino toolchain (the same USB flash path as the legacy
+// modbustest.ino) can build it. See firmware.cpp for the behaviour and
+// ../../src/finishing_line/sim/fake_clearcore.py for the executable spec
+// this firmware mirrors.
+
+#include "firmware.h"
+
+void setup() { firmwareSetup(); }
+void loop() { firmwareLoop(); }

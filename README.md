@@ -15,7 +15,7 @@ Build order (CLAUDE.md) — steps 1 and 2 are done, 3-6 are stubs.
 | 3 | Device drivers | **done vs sims** — ClearCore + UR dashboard; RTDE verified on URSim; real-robot motion awaits hardware |
 | 4 | Motion primitives | executor/train/supervisor done; force-mode sanding awaits hardware window |
 | 5 | FastAPI / HMI | **done** — `python -m finishing_line.api --sim`, HMI at http://localhost:8000 |
-| 6 | Commissioning | not started |
+| 6 | Commissioning | firmware ready to flash — [`firmware/`](firmware/README.md); bench bring-up next |
 
 Simulation: fake ClearCore (`sim/fake_clearcore.py`, works today) + URSim via
 [`docker-compose.ursim.yml`](docker-compose.ursim.yml). Stage-by-stage guide:
