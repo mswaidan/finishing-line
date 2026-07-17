@@ -81,17 +81,21 @@ round-trip against URSim, run from PowerShell with:
 wsl -d Ubuntu-24.04 -- /home/mswaidan/fl-venv/bin/python /home/mswaidan/rtde_smoke.py
 ```
 
-**Wrinkle: the repo lives on the NAS** (`L:` = `\\swg-nas\swg-root`), which WSL
-does not auto-mount — `/mnt/l` does not exist. Consequences:
+**The repo is on GitHub** (`mswaidan/finishing-line`, private) and cloned at
+`/home/mswaidan/finishing-line` inside WSL, with the project installed editable
+into `fl-venv` — the full test suite passes there (verified 2026-07-17). WSL
+git authenticates through the Windows credential manager bridge
+(`credential.helper` points at `git-credential-manager-core.exe`).
 
-- Self-contained scripts (like `scripts/rtde_smoke.py`) run by copying them to
-  `/tmp` inside WSL.
-- Real driver development under WSL wants the repo accessible from Linux:
-  either `sudo mount -t drvfs '\\swg-nas\swg-root' /mnt/l` per session, or —
-  better — put the repo under git and clone it into the WSL home. The repo is
-  currently **not a git repository at all**, which is worth fixing regardless.
-- Launch `wsl.exe` from a `C:` working directory; launching from `L:` makes
-  WSL fail to translate the CWD.
+Workflow: the NAS working copy (`L:\...\Code`) and the WSL clone are two
+checkouts of the same GitHub remote — push from one, pull in the other.
+
+Two Windows-side quirks, learned the hard way:
+
+- Launch `wsl.exe` from a `C:` working directory; launching from `L:` (a
+  network drive WSL can't translate) fails.
+- From Git Bash, prefix `wsl.exe` calls with `MSYS_NO_PATHCONV=1` or
+  arguments like `/root` get rewritten to Windows paths.
 
 URSim reachability from WSL: `rtde_smoke.py` probes `localhost` first
 (mirrored networking) and falls back to the WSL gateway IP (NAT networking),
