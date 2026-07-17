@@ -34,7 +34,7 @@ from dataclasses import dataclass
 
 from ..config.loader import ConveyorKinematics, load_conveyor_kinematics
 from ..core.model import ShutterState, Station, Zone
-from .registers import New
+from .registers import Command, New
 
 try:
     from pymodbus.client import ModbusTcpClient
@@ -208,6 +208,14 @@ class ClearCoreClient:
     def set_fan(self, station: Station, on: bool) -> None:
         self._write_register(_FAN_CMD[station], 1 if on else 0)
 
+    def set_feed_conveyor(self, on: bool) -> None:
+        """The INQ queue's own belt (legacy M1, coil 107 — vocabulary reused).
+
+        The queue advances ONLY while this runs; zone 1 alone never pulls from
+        it. TrainMover raises it for INQ->IF moves and drops it after.
+        """
+        self._write_coil(Command.FEED_CONVEYOR, on)
+
     def fan_on(self, station: Station) -> bool:
         """Feedback, not command — what the fan is actually doing."""
         return bool(self._read_register(_FAN_FEEDBACK[station]))
@@ -232,6 +240,19 @@ class ClearCoreClient:
         )
 
     # ------------------------------------------------------ sensors / health
+
+    def presence(self, station: Station) -> bool:
+        """Single presence sensor — one Modbus read, for fast polling loops."""
+        regs = {
+            Station.IF: New.IF_PRESENT,
+            Station.S: New.S_PRESENT,
+            Station.FD: New.FD_PRESENT,
+        }
+        return self._read_discrete(regs[station])
+
+    def handoff(self, *, downstream: bool) -> bool:
+        """The IF<->S crossing-confirmed sensor for the given direction."""
+        return self._read_discrete(New.HANDOFF_TO_Z2 if downstream else New.HANDOFF_TO_Z1)
 
     def read_inputs(self) -> ClearCoreInputs:
         return ClearCoreInputs(

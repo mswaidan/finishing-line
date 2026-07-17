@@ -1,84 +1,120 @@
-"""Train advance — the two-belt handoff.
-
-WHY THIS IS NOT A DRIVER CALL
------------------------------
-`AdvanceTrain` looks like "command two conveyors", but it is a coordinated
-manoeuvre across both belts, terminated by a sensor rather than a distance. Same
-category as the sanding duet in sander.py: a composite no single device can
-carry out, which is why it lives in process/ and not in devices/.
+"""Train advance — the two-belt handoff, implemented against ClearCoreClient.
 
 THE MANOEUVRE
 -------------
-Nothing spans IF <-> S. A part crosses by handoff: both belts run together, at
-matched speed, until a sensor confirms the part is on the receiving belt. Belts
-must run at the same speed — a part bridging the gap between two belts moving at
-different speeds skews or scuffs.
+Nothing spans IF <-> S; a part crosses by handoff: both belts run together at
+matched speed until a sensor confirms the part is on the receiving belt
+(HANDOFF_TO_Z2 downstream, HANDOFF_TO_Z1 for the P2->P3 retreat). Almost every
+transition crosses that boundary, so the usual advance is a synchronised
+both-belt run; the exceptions are the sparse startup/drain transitions whose
+crossing move has an empty source and was dropped by the core.
 
-Every transition in the steady schedule crosses IF <-> S (S is occupied every
-beat), so every transition is a synchronised both-belt run. There is no
-zone-1-only or zone-2-only advance to implement.
+The run is CONTINUOUS mode, terminated by sensors:
 
-    DOWNSTREAM  run both belts forward until the crossing part trips the
-                zone-2 handoff sensor, then continue to destination sensors
-    UPSTREAM    run both belts reverse until the crossing part trips the
-                zone-1 handoff sensor  (P2->P3 only: the trail's retreat)
+    1. start every involved zone in continuous mode, same direction
+    2. if a crossing move is present, wait for the handoff sensor
+    3. wait for every destination's presence sensor (absence, for OUT)
+    4. idle the zones
 
-WHERE THIS GETS DELICATE
-------------------------
-One belt moves every part on it by one distance. Sensor-terminating the run
-measures that distance; it does not decouple the parts sharing the belt.
+Completion means the destination sensors already read occupied — which is what
+lets the core's MOVING phase reconcile occupancy against sensors immediately
+after the intent completes, without a settling window.
 
-P2->P3 is the case to get right. Moves are S->IF and FD->S, and BOTH parts start
-on zone 2. Zone 2 reverses and both travel together. Terminate on the retreating
-part reaching zone 1 and the FD part only lands on S if IF->S == S->FD;
-terminate on the FD part reaching S and the retreating part is the one that
-misses. There is no termination rule that rescues unequal pitches — the fix is
-physical, not logical.
-
-Likewise on P4->P1', zone 1 carries the INQ part while handing another part to
-S, so INQ->IF is tied to the same distance.
-
-Hence the design assumption: all four station gaps equal. If commissioning finds
-they are not, this module grows sequenced sub-moves and the core's one-advance-
-per-transition model in schedule.py has to change with it.
-
-TODO(step 3/4): implement against hardware in a maintenance window.
+PITCH DEPENDENCE. One belt moves every part on it by one distance; terminating
+on sensors measures that distance rather than decoupling the parts sharing a
+belt. This implementation is correct only if the four station gaps are equal —
+the standing physical assumption (line-config stations.pitch_mm). If
+commissioning finds unequal gaps, this module grows sequenced sub-moves and the
+schedule's one-advance-per-transition model changes with it.
 """
 
 from __future__ import annotations
 
-from ..core.model import Direction, Station
+import time
+
+from ..core.model import Direction, Station, Zone
+from ..devices.clearcore import ClearCoreClient
+
+
+class TrainError(RuntimeError):
+    """A train advance did not confirm — parts are in an unknown position.
+
+    Deliberately fatal: the supervisor faults the machine, and recovery is the
+    §7 occupancy-scan flow, not a retry. Re-running belts against unknown part
+    positions is how collisions happen.
+    """
+
+
+#: Which belts a single-station move rides on. The IF<->S crossing needs both.
+_MOVE_ZONES: dict[tuple[Station, Station], tuple[Zone, ...]] = {
+    (Station.INQ, Station.IF): (Zone.ZONE1,),
+    (Station.IF, Station.S): (Zone.ZONE1, Zone.ZONE2),
+    (Station.S, Station.IF): (Zone.ZONE1, Zone.ZONE2),
+    (Station.S, Station.FD): (Zone.ZONE2,),
+    (Station.FD, Station.S): (Zone.ZONE2,),
+    (Station.FD, Station.OUT): (Zone.ZONE2,),
+}
 
 
 class TrainMover:
-    """Executes `AdvanceTrain` intents across both belts."""
+    def __init__(self, cc: ClearCoreClient, *, timeout_s: float = 60.0, poll_s: float = 0.02) -> None:
+        self._cc = cc
+        self._timeout_s = timeout_s
+        self._poll_s = poll_s
 
     def advance(self, direction: Direction, moves: tuple[tuple[Station, Station], ...]) -> None:
-        """Advance every part one station in `direction`.
+        if not moves:
+            return
+        downstream = direction is Direction.DOWNSTREAM
+        zones = {zone for move in moves for zone in _MOVE_ZONES[move]}
+        crossing = any(move in (((Station.IF, Station.S)), (Station.S, Station.IF)) for move in moves)
 
-        TODO(step 4).
+        # The INQ queue rides its own feed conveyor (legacy M1): zone 1 alone
+        # never pulls from the queue, so an INQ->IF move needs the feed belt
+        # running alongside — and every other transition must leave it OFF, or
+        # zone-1 runs would drag unplanned parts onto IF.
+        feeding = (Station.INQ, Station.IF) in moves
+        if feeding:
+            self._cc.set_feed_conveyor(True)
+        for zone in zones:
+            self._cc.set_zone_continuous(zone, downstream=downstream)
+        # Completion = the post-shift occupancy PATTERN, not per-move sensor
+        # levels. A level check like "wait until FD present" passes instantly
+        # when FD is still occupied by the part that is about to LEAVE (every
+        # simultaneous vacate+fill, e.g. FD->OUT with S->FD), stopping the
+        # belts before anything moved. The pattern below is provably false
+        # before the shift — the train's most-downstream destination is always
+        # empty beforehand (guards) — and true only after it:
+        #   every destination present  AND  every source-only station empty.
+        dests = {dst for _src, dst in moves if dst is not Station.OUT}
+        source_only = {
+            src for src, _dst in moves if src in (Station.IF, Station.S, Station.FD)
+        } - dests
 
-        Sketch:
-          1. Both belts to matched velocity in `direction`.
-          2. Run until the handoff sensor confirms the crossing part has
-             transferred (zone 2's sensor downstream, zone 1's upstream).
-          3. Continue to the destination presence sensors; stop both belts.
-          4. Confirm every destination in `moves` reads occupied before
-             returning — completion means CONFIRMED, not commanded. The core
-             faults on an unconfirmed advance rather than believing it.
+        def shifted() -> bool:
+            return all(self._cc.presence(d) for d in dests) and not any(
+                self._cc.presence(s) for s in source_only
+            )
 
-        A `moves` list whose sources are partly empty is normal, not an error:
-        that is startup fill and drain (§4, §5) running the steady pattern with
-        unoccupied slots. Terminate on whichever parts are actually present.
-        """
-        raise NotImplementedError
+        try:
+            if crossing:
+                self._wait(
+                    lambda: self._cc.handoff(downstream=downstream),
+                    f"handoff sensor ({'to zone 2' if downstream else 'to zone 1'})",
+                )
+            self._wait(shifted, f"train shift {[f'{s}->{d}' for s, d in moves]}")
+        finally:
+            # Belts stop no matter what. On the failure path parts are in an
+            # unknown position — leaving belts running makes that worse.
+            if feeding:
+                self._cc.set_feed_conveyor(False)
+            for zone in zones:
+                self._cc.set_zone_idle(zone)
 
-    def _handoff_sensor(self, direction: Direction) -> str:
-        """Which sensor confirms the IF<->S crossing, per direction.
-
-        TODO: assign the register. devices/registers.py has no handoff sensor
-        yet — the proposed map predates knowing the crossing was sensor-
-        terminated, and it needs one sensor per direction (or one that reports
-        which belt the part is on).
-        """
-        raise NotImplementedError
+    def _wait(self, predicate, what: str) -> None:
+        deadline = time.monotonic() + self._timeout_s
+        while time.monotonic() < deadline:
+            if predicate():
+                return
+            time.sleep(self._poll_s)
+        raise TrainError(f"train advance timed out waiting for {what} ({self._timeout_s:.0f}s)")
