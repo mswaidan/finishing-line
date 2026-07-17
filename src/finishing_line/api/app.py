@@ -1,23 +1,104 @@
-"""FastAPI + websocket layer — the HMI's only interface.
+"""FastAPI layer — the HMI's only interface to the line.
 
-The HMI never talks to the robot or the ClearCore directly (CLAUDE.md,
-Architecture). Everything goes through the orchestrator.
+Thin by design: every route is a direct call into LineController, which owns
+all thread-safety. The HMI (served at /) never talks to the robot or the
+ClearCore; that rule is the architecture (CLAUDE.md), and this module is where
+it is enforced by construction — there is simply nothing else to call.
 
-TODO(step 5): implement once the state machine is commissioned.
-
-Intended surface:
-
-    GET  /state            -> LineState + per-part timers + blocked_by
-    POST /batch            -> operator declares parts at INQ (identity enters
-                              the system here; sensors only ever report counts)
-    POST /run  /stop
-    POST /fault/ack        -> operator confirms reconstructed occupancy after a
-                              sensor mismatch (§7 recovery)
-    WS   /events           -> state deltas, ~2 Hz
-
-`blocked_by` is not a nicety. A line sitting still with no stated reason is how
-operators learn to bypass interlocks — `StepResult.blocked_by` carries the
-reason from the guard that stopped it and should be on the HMI's main view.
+No auth: this binds to the shop LAN for operators. Do not expose it wider.
 """
 
 from __future__ import annotations
+
+import asyncio
+from pathlib import Path
+
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.responses import HTMLResponse
+from pydantic import BaseModel, Field
+
+from ..process.controller import LineController
+
+_HMI = Path(__file__).with_name("hmi.html")
+
+
+class BatchRequest(BaseModel):
+    product: str = Field(pattern="^(cube|browser)$")
+    part_ids: list[str] | None = None
+    count: int | None = Field(default=None, ge=1, le=8)
+
+
+class RunRequest(BaseModel):
+    enabled: bool
+
+
+class HaltRequest(BaseModel):
+    reason: str = "operator halt"
+
+
+class FaultAckRequest(BaseModel):
+    #: station name (IF/S/FD) -> part id; omit to accept current belief
+    occupancy: dict[str, str] | None = None
+    beat: str | None = Field(default=None, pattern="^P[1-4]$")
+
+
+def create_app(controller: LineController) -> FastAPI:
+    app = FastAPI(title="finishing-line", docs_url="/docs")
+    seq = {"n": 0}
+
+    @app.get("/", response_class=HTMLResponse)
+    def hmi() -> str:
+        return _HMI.read_text(encoding="utf-8")
+
+    @app.get("/state")
+    def state() -> dict:
+        return controller.snapshot()
+
+    @app.post("/run")
+    def run(req: RunRequest) -> dict:
+        controller.set_running(req.enabled)
+        return {"enabled": req.enabled}
+
+    @app.post("/halt")
+    def halt(req: HaltRequest) -> dict:
+        controller.halt(req.reason)
+        return {"halted": True, "reason": req.reason}
+
+    @app.post("/batch")
+    def batch(req: BatchRequest) -> dict:
+        if req.part_ids is None and req.count is None:
+            raise HTTPException(422, "provide part_ids or count")
+        ids = req.part_ids
+        if ids is None:
+            ids = []
+            for _ in range(req.count or 0):
+                seq["n"] += 1
+                ids.append(f"{req.product[0]}{seq['n']:03d}")
+        try:
+            staged = controller.declare_batch(req.product, ids)
+        except ValueError as exc:
+            raise HTTPException(409, str(exc)) from exc
+        return {"staged": staged}
+
+    @app.post("/fault/ack")
+    def fault_ack(req: FaultAckRequest) -> dict:
+        resumed, reason = controller.ack_fault(req.occupancy, req.beat)
+        if not resumed:
+            raise HTTPException(409, reason or "resume rejected")
+        return {"resumed": True}
+
+    @app.websocket("/events")
+    async def events(ws: WebSocket) -> None:
+        """State stream, ~4 Hz. Snapshot-based, not delta-based: at this size
+        (a few KB) deltas are complexity with no payoff, and a reconnecting
+        HMI needs the full picture anyway.
+        """
+        await ws.accept()
+        try:
+            while True:
+                await ws.send_json(controller.snapshot())
+                await asyncio.sleep(0.25)
+        except WebSocketDisconnect:
+            pass
+
+    return app

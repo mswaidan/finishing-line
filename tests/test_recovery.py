@@ -96,15 +96,17 @@ def test_resume_after_protective_stop_completes_the_batch(cfg):
     # Operator scan agrees with the controller here (nothing physically moved),
     # so resume with no corrections.
     result = resume(state, line.sensors(len(state.inq_queue)))
-    assert result.state.phase is Phase.ROBOT_WORK
+    assert result.state.phase is not Phase.FAULTED
     assert result.state.fault is None
+    assert result.intents, "resume must emit the re-home (MoveToSafePose)"
 
     # The interrupted work batch died with the fault; the fake line must not
-    # keep acting on stale intents the machine no longer tracks.
+    # keep acting on stale intents the machine no longer tracks. The re-home
+    # intent resume emitted is the one thing that DOES run.
     line.queue.clear()
     line.current = None
-    line.robot_clear = True
     line.gun_on = False
+    line.submit(result.intents)
 
     sim = run(result.state, line, cfg, until_outfeed=2, max_seconds=10_000.0)
     assert sim.outfeed_count == 2, f"batch did not finish; blocked by {sim.last_blocked_by}"
@@ -134,8 +136,10 @@ def test_resume_does_not_double_coat(cfg):
     line.robot_clear = True
     line.gun_on = False
 
-    # Step through the resumed beat's ROBOT_WORK. No part may gain a coat.
-    nxt = step(result.state, Inputs(dt=1.0, sensors=line.sensors(0)), cfg)
+    # Complete the re-home, then step through the resumed beat's ROBOT_WORK.
+    # No part may gain a coat.
+    rehome_ids = frozenset(i.intent_id for i in result.intents)
+    nxt = step(result.state, Inputs(dt=1.0, sensors=line.sensors(0), completed=rehome_ids), cfg)
     for pid, coats in coats_at_fault.items():
         if pid in nxt.state.parts:
             assert nxt.state.parts[pid].coats_applied == coats, f"{pid} was re-coated on resume"

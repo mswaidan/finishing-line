@@ -12,9 +12,9 @@ Build order (CLAUDE.md) — steps 1 and 2 are done, 3-6 are stubs.
 |---|---|---|
 | 1 | Archaeology | **done** — [`cell-config.yaml`](cell-config.yaml) |
 | 2 | State machine + simulator + tests | **done** — 67 tests, no hardware needed |
-| 3 | Device drivers | sim environment ready — see [`docs/simulation.md`](docs/simulation.md) |
-| 4 | Motion primitives | stubbed — `process/` |
-| 5 | FastAPI / HMI | stubbed — `api/` |
+| 3 | Device drivers | **done vs sims** — ClearCore + UR dashboard; RTDE verified on URSim; real-robot motion awaits hardware |
+| 4 | Motion primitives | executor/train/supervisor done; force-mode sanding awaits hardware window |
+| 5 | FastAPI / HMI | **done** — `python -m finishing_line.api --sim`, HMI at http://localhost:8000 |
 | 6 | Commissioning | not started |
 
 Simulation: fake ClearCore (`sim/fake_clearcore.py`, works today) + URSim via

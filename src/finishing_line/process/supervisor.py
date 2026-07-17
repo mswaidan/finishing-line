@@ -106,6 +106,27 @@ class Supervisor:
         self.cc.heartbeat()
         return result
 
+    def idle_tick(self, dt: float) -> None:
+        """A paused tick: timers and watchdog only, no scheduling.
+
+        Operator pause must not stop parts drying (flash timers keep banking,
+        against fan FEEDBACK as always) and must not go silent on the watchdog
+        (a pause is not a dead orchestrator — tripping it would force fans on
+        and halt zones out from under a deliberate operator action). What it
+        does NOT do is step the machine: no new intents, so the line holds at
+        the next phase boundary while in-flight executor work finishes.
+        """
+        from ..core.timers import advance_flash_timers
+
+        cc_inputs = self.cc.read_inputs()
+        state = replace(
+            self.state,
+            if_fan=FanState.ON if cc_inputs.if_fan_on else FanState.OFF,
+            fd_fan=FanState.ON if cc_inputs.fd_fan_on else FanState.OFF,
+        )
+        self.state = replace(state, parts=advance_flash_timers(state, dt))
+        self.cc.heartbeat()
+
     def run(self, *, until, timeout_s: float) -> StepResult:
         """Tick at tick_hz until `until(state)` is true or the deadline passes.
 

@@ -209,6 +209,11 @@ class LineState:
     spray_burst_active: bool = False
 
     fault: str | None = None
+    #: The phase the machine was in when the fault hit. Recovery needs it: a
+    #: fault before the beat's train move resumes at the work/guard phases; a
+    #: fault after it must NOT replay them (the beat counter only advances at
+    #: SET_FANS, so post-move state pairs a stale beat with advanced occupancy).
+    fault_phase: str | None = None
 
     def part_at(self, station: Station) -> PartState | None:
         part_id = self.occupancy.get(station)

@@ -121,23 +121,61 @@ def resume(
     robot_work faults again with a message naming the expected role — safe, and
     it tells the operator which way to correct.
 
-    Resumes at ROBOT_WORK. Safe because work emission is idempotent: a part
-    already carrying this beat's coat is not re-sprayed (see _robot_work). A
-    part that was mid-spray when the fault hit is recorded as coated even though
-    the coat may be partial — the controller cannot know how much paint landed.
-    Pulling it for QC is the operator's call, per the offline rework loop.
+    The re-entry phase follows from where the fault landed (fault_phase):
+    pre-move faults resume at ROBOT_WORK (safe — work emission is idempotent,
+    a part already carrying this beat's coat is not re-sprayed), post-move
+    faults finish the transition machinery instead of replaying a work phase
+    that already happened, and mid-move faults are disambiguated by whether
+    the operator's confirmed occupancy matches the pre- or post-move picture.
+    A part that was mid-spray when the fault hit is recorded as coated even
+    though the coat may be partial — the controller cannot know how much paint
+    landed. Pulling it for QC is the operator's call, per the offline rework
+    loop.
+
+    Resume EMITS MoveToSafePose. The fault very likely killed the batch that
+    would have retracted the robot, so ROBOT_CLEAR is probably false and every
+    guard would block forever. Choreography step 1 is "robot retracts to safe
+    pose" — recovery re-establishes that invariant explicitly rather than
+    hoping. Harmless when the robot is already clear.
     """
     if state.phase is not Phase.FAULTED:
         return StepResult(state, blocked_by="resume called but machine is not faulted")
 
     occupancy = dict(confirmed_occupancy) if confirmed_occupancy is not None else state.occupancy
+    candidate = replace(state, occupancy=occupancy, beat=beat or state.beat)
+
+    # Where to re-enter depends on where the fault landed relative to this
+    # beat's train move — the beat counter only advances at SET_FANS, so a
+    # post-move fault pairs a stale beat with advanced occupancy, and
+    # replaying ROBOT_WORK there trips the role check on phantom grounds.
+    entry = state.fault_phase or str(Phase.ROBOT_WORK)
+    if entry in (str(Phase.SHUTTER_CLOSE), str(Phase.SET_FANS)):
+        # Post-move: finish the transition machinery (idempotent), advance.
+        target = Phase.SHUTTER_CLOSE
+    elif entry == str(Phase.MOVING) and state.in_flight:
+        # Mid-move: did the train physically shift? The operator's confirmed
+        # occupancy decides. Matching the post-move projection means yes —
+        # adopt it and finish the transition; matching the pre-move belief
+        # means no — re-run the guarded move. Anything else is a manual
+        # repositioning: start the beat over and let the checks validate.
+        projected = _apply_moves(replace(state, fault=None), state.in_flight)
+        if occupancy == projected.occupancy:
+            candidate = replace(projected, beat=beat or state.beat)
+            target = Phase.SHUTTER_CLOSE
+        elif occupancy == state.occupancy:
+            target = Phase.AWAIT_GUARDS
+        else:
+            target = Phase.ROBOT_WORK
+    else:
+        target = Phase.ROBOT_WORK
+
+    rehome = MoveToSafePose()
     candidate = replace(
-        state,
-        occupancy=occupancy,
-        beat=beat or state.beat,
-        phase=Phase.ROBOT_WORK,
+        candidate,
+        phase=target,
         fault=None,
-        pending=(),
+        fault_phase=None,
+        pending=(rehome.intent_id,),
         in_flight=(),
     )
 
@@ -147,14 +185,16 @@ def resume(
             replace(state, occupancy=occupancy),
             blocked_by=f"resume rejected: {mismatch}",
         )
-    return StepResult(candidate)
+    return StepResult(candidate, intents=(rehome,))
 
 
 def _enter_fault(state: LineState, reason: str) -> StepResult:
     """Halt zones; leave fans running so parts mid-flash keep drying (§7)."""
     if state.phase == Phase.FAULTED:
         return StepResult(state, blocked_by=state.fault)
-    state = replace(state, phase=Phase.FAULTED, fault=reason, pending=())
+    state = replace(
+        state, phase=Phase.FAULTED, fault=reason, fault_phase=str(state.phase), pending=()
+    )
     return StepResult(state, intents=(HaltZones(reason=reason),), blocked_by=reason)
 
 

@@ -26,6 +26,9 @@ dev = [
     # Client only, for tests/test_fake_clearcore.py — the fake server itself is
     # stdlib. Same library the real ClearCoreClient driver uses.
     "pymodbus>=3.6,<4",
+    # API-layer tests (fastapi TestClient needs httpx)
+    "fastapi>=0.110",
+    "httpx>=0.27",
 ]
 
 [build-system]
