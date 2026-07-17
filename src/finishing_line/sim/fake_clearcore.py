@@ -33,7 +33,17 @@ import threading
 import time
 from dataclasses import dataclass, field
 
-from ..devices.registers import Command, Echo, New, Status
+from ..devices.registers import (
+    MODE_CONTINUOUS,
+    MODE_DISTANCE,
+    MODE_IDLE,
+    MODE_SENSOR_STOP,
+    Command,
+    Echo,
+    New,
+    SensorTarget,
+    Status,
+)
 
 TABLE_SIZE = 1024
 
@@ -46,15 +56,19 @@ _WRITE_COIL = 5
 _WRITE_REGISTER = 6
 _WRITE_REGISTERS = 16
 
-#: Zone motion modes, matching the legacy vocabulary (cell-config enums).
-MODE_DISTANCE = 0
-MODE_CONTINUOUS = 2
-MODE_IDLE = 3
-
 #: Zone states (cell-config server_state enum).
 STATE_NOT_READY = 0
 STATE_READY = 1
 STATE_MOVING = 2
+
+#: SensorTarget code -> discrete-input register holding that sensor.
+_TARGET_SENSOR_REG = {
+    SensorTarget.IF_PRESENT: New.IF_PRESENT,
+    SensorTarget.S_PRESENT: New.S_PRESENT,
+    SensorTarget.FD_PRESENT: New.FD_PRESENT,
+    SensorTarget.HANDOFF_TO_Z1: New.HANDOFF_TO_Z1,
+    SensorTarget.HANDOFF_TO_Z2: New.HANDOFF_TO_Z2,
+}
 
 
 @dataclass
@@ -64,8 +78,11 @@ class _ZoneBlock:
     reqid_reg: int
     state_reg: int
     ack_reg: int
+    target_reg: int
     last_reqid: int = 0
     move_done_at: float | None = None
+    #: Armed sensor-stop: (sensor register, want_rising, last seen level).
+    edge_watch: tuple[int, bool, bool] | None = None
 
 
 @dataclass
@@ -90,9 +107,11 @@ class FakeClearCore:
     def __post_init__(self) -> None:
         self._zones = (
             _ZoneBlock(New.ZONE1_MOTION_MODE, New.ZONE1_DISTANCE,
-                       New.ZONE1_REQUEST_ID, New.ZONE1_STATE, New.ZONE1_REQID_ACK),
+                       New.ZONE1_REQUEST_ID, New.ZONE1_STATE, New.ZONE1_REQID_ACK,
+                       New.ZONE1_TARGET),
             _ZoneBlock(New.ZONE2_MOTION_MODE, New.ZONE2_DISTANCE,
-                       New.ZONE2_REQUEST_ID, New.ZONE2_STATE, New.ZONE2_REQID_ACK),
+                       New.ZONE2_REQUEST_ID, New.ZONE2_STATE, New.ZONE2_REQID_ACK,
+                       New.ZONE2_TARGET),
         )
         self.holding[New.ZONE1_MOTION_MODE] = MODE_IDLE
         self.holding[New.ZONE2_MOTION_MODE] = MODE_IDLE
@@ -174,14 +193,17 @@ class FakeClearCore:
         for zone in self._zones:
             if tripped:
                 zone.move_done_at = None
+                zone.edge_watch = None
                 self.input_regs[zone.state_reg] = STATE_READY
                 continue
             mode = self.holding[zone.mode_reg]
             if mode == MODE_CONTINUOUS:
                 zone.move_done_at = None
+                zone.edge_watch = None
                 self.input_regs[zone.state_reg] = STATE_MOVING
             elif mode == MODE_IDLE:
                 zone.move_done_at = None
+                zone.edge_watch = None
                 self.input_regs[zone.state_reg] = STATE_READY
             elif mode == MODE_DISTANCE:
                 reqid = self.holding[zone.reqid_reg]
@@ -196,6 +218,28 @@ class FakeClearCore:
                 elif zone.move_done_at is not None and now >= zone.move_done_at:
                     zone.move_done_at = None
                     self.input_regs[zone.state_reg] = STATE_READY
+            elif mode == MODE_SENSOR_STOP:
+                reqid = self.holding[zone.reqid_reg]
+                if reqid != zone.last_reqid:
+                    zone.last_reqid = reqid
+                    raw = self.holding[zone.target_reg]
+                    want_rising = not (raw & SensorTarget.FALLING)
+                    sensor_reg = _TARGET_SENSOR_REG[SensorTarget(raw & ~SensorTarget.FALLING)]
+                    # EDGE semantics: record the level at arm time; only a
+                    # TRANSITION to the target polarity stops the belt. A
+                    # level already at target must not trip — that is the
+                    # vacate-then-fill case this mode exists to get right.
+                    zone.edge_watch = (sensor_reg, want_rising, bool(self.discrete[sensor_reg]))
+                    self.input_regs[zone.state_reg] = STATE_MOVING
+                    self.input_regs[zone.ack_reg] = reqid
+                elif zone.edge_watch is not None:
+                    sensor_reg, want_rising, prev = zone.edge_watch
+                    level = bool(self.discrete[sensor_reg])
+                    if level != prev and level == want_rising:
+                        zone.edge_watch = None
+                        self.input_regs[zone.state_reg] = STATE_READY
+                    else:
+                        zone.edge_watch = (sensor_reg, want_rising, level)
 
     # ------------------------------------------------------------- protocol
 

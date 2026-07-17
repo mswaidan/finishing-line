@@ -12,6 +12,8 @@ fan-feedback truth rule — all through the actual wire protocol.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 pytest.importorskip("pymodbus.client")
@@ -91,6 +93,11 @@ def test_two_parts_full_cycle_over_modbus(stack):
 
     assert sup.state.fault is None, f"faulted: {sup.state.fault}"
     assert not sup.state.parts, "controller should have outfed both parts"
+    # The final part coasts through the physics transit gap after its stop
+    # edge — give phase B a moment to land it at OUT.
+    deadline = time.monotonic() + 2.0
+    while time.monotonic() < deadline and physics.outfed < 2:
+        time.sleep(0.05)
     assert physics.outfed == 2, f"physics saw {physics.outfed} parts leave, expected 2"
     assert physics.occupied == set(), "line should be physically empty"
 

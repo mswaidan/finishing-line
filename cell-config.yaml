@@ -106,6 +106,10 @@ conveyor:
     acceleration_steps_per_sec2: 100000  # ino:208
 
   driver:  # ino:192-207
+    # Generic open-loop step/dir stepper drivers (confirmed 2026-07-17) — NOT
+    # ClearPath servos, despite the CPM_ mode name. No closed loop anywhere:
+    # positioning truth is sensor-referenced stations + open-loop step counting
+    # for in-station passes, with the 12mm pass inset absorbing the tolerance.
     input_clocking: CLOCK_RATE_LOW
     mode: CPM_MODE_STEP_AND_DIR
     main:  { invert_sd_enable: true, invert_sd_direction: false }

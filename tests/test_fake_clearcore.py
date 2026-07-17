@@ -182,6 +182,86 @@ def test_legacy_status_block_is_readable(client):
     assert client.read_input_registers(Status.SERVER_STATE, count=1).registers[0] == STATE_READY
 
 
+@pytest.fixture()
+def edge_rig():
+    """Own server for the edge tests: the module fixture's watchdog gets armed
+    by the watchdog test and would trip mid-test here (these tests never
+    heartbeat — and never arming it is also the realistic pre-orchestrator
+    state for a firmware bench check).
+    """
+    server = FakeClearCore(port=15026, shutter_actuation_s=0.05).start()
+    c = pymodbus_client.ModbusTcpClient("127.0.0.1", port=15026, timeout=2.0)
+    assert c.connect()
+    yield server, c
+    c.close()
+    server.stop()
+
+
+def test_sensor_stop_is_edge_triggered_not_level(edge_rig):
+    fake, client = edge_rig
+    """The heart of MODE_SENSOR_STOP: arming against a sensor that is ALREADY
+    at the target level must NOT stop the belt — only a transition counts.
+    This is the vacate-then-fill case: the destination sensor is still held by
+    the departing part when the move is armed.
+    """
+    from finishing_line.devices.registers import MODE_IDLE as REG_MODE_IDLE
+    from finishing_line.devices.registers import MODE_SENSOR_STOP, SensorTarget
+
+    # FD is already occupied when the move is armed.
+    fake.set_input(New.FD_PRESENT, 1)
+    time.sleep(0.05)
+
+    client.write_register(New.ZONE2_TARGET, int(SensorTarget.FD_PRESENT))  # rising
+    client.write_register(New.ZONE2_MOTION_MODE, MODE_SENSOR_STOP)
+    client.write_register(New.ZONE2_REQUEST_ID, 77)
+
+    assert _await(
+        lambda: client.read_input_registers(New.ZONE2_REQID_ACK, count=1).registers[0] == 77
+    ), "move never acked"
+    time.sleep(0.15)
+    assert (
+        client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+    ), "level-already-high must not satisfy a rising-edge stop"
+
+    # Departing part clears FD (falling edge — not our target)...
+    fake.set_input(New.FD_PRESENT, 0)
+    time.sleep(0.15)
+    assert client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+
+    # ...and the arriving part gives the rising edge that stops the belt.
+    fake.set_input(New.FD_PRESENT, 1)
+    assert _await(
+        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_READY
+    ), "rising edge never stopped the zone"
+
+    client.write_register(New.ZONE2_MOTION_MODE, REG_MODE_IDLE)
+    fake.set_input(New.FD_PRESENT, 0)
+
+
+def test_sensor_stop_falling_edge(edge_rig):
+    """FD->OUT with no replacement: stop when FD goes EMPTY."""
+    fake, client = edge_rig
+    from finishing_line.devices.registers import MODE_IDLE as REG_MODE_IDLE
+    from finishing_line.devices.registers import MODE_SENSOR_STOP, SensorTarget
+
+    fake.set_input(New.FD_PRESENT, 1)
+    time.sleep(0.05)
+    client.write_register(
+        New.ZONE2_TARGET, int(SensorTarget.FD_PRESENT) | int(SensorTarget.FALLING)
+    )
+    client.write_register(New.ZONE2_MOTION_MODE, MODE_SENSOR_STOP)
+    client.write_register(New.ZONE2_REQUEST_ID, 78)
+    assert _await(
+        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+    )
+
+    fake.set_input(New.FD_PRESENT, 0)
+    assert _await(
+        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_READY
+    ), "falling edge never stopped the zone"
+    client.write_register(New.ZONE2_MOTION_MODE, REG_MODE_IDLE)
+
+
 def test_port_collision_fails_loudly(fake):
     """A second server on a held port must raise, not half-start. A silent
     bind failure leaves clients talking to whatever stale process owns the

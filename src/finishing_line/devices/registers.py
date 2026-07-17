@@ -116,10 +116,13 @@ class New(IntEnum):
     ZONE1_DISTANCE = 311
     ZONE1_REQUEST_ID = 312
     ZONE1_DIRECTION = 313    # coil: 1 = downstream
+    #: Sensor-stop target for MODE_SENSOR_STOP (see SensorTarget below).
+    ZONE1_TARGET = 314
     ZONE2_MOTION_MODE = 320
     ZONE2_DISTANCE = 321
     ZONE2_REQUEST_ID = 322
     ZONE2_DIRECTION = 323    # coil: 1 = downstream
+    ZONE2_TARGET = 324
     ZONE1_STATE = 410
     ZONE2_STATE = 411
     # Move-acceptance ack: firmware mirrors the REQUEST_ID it last RECOGNISED.
@@ -139,6 +142,42 @@ class New(IntEnum):
     # yet must not sit with fans forced on and zones locked. Once armed, never
     # disarms; a resumed heartbeat clears a trip.
     HEARTBEAT = 330
+
+
+class SensorTarget(IntEnum):
+    """Encoding for the ZONE*_TARGET registers (MODE_SENSOR_STOP = 4).
+
+    Low bits pick the sensor; adding FALLING (8) stops on the falling edge
+    instead of the rising one. EDGES, not levels: the firmware records the
+    sensor's state when the move is recognised and stops on the first
+    TRANSITION to the target polarity. Level-triggered stops are wrong for
+    every vacate-then-fill sequence — the destination sensor is still held by
+    the departing part when the move starts, so a level check trips instantly.
+    The firmware watches its own inputs at loop rate (~10 ms), which is the
+    whole point: the stop is a reflex, with no Modbus round-trip (~20-50 ms of
+    variance at the orchestrator) in the positioning chain. Positioning truth
+    on this line is sensors + open-loop step counting — there are no encoders
+    and no closed-loop motors — so the sensor edge deserves the tightest stop
+    we can give it.
+    """
+
+    IF_PRESENT = 1
+    S_PRESENT = 2
+    FD_PRESENT = 3
+    HANDOFF_TO_Z1 = 4
+    HANDOFF_TO_Z2 = 5
+    #: Flag: add to a sensor code to stop on its FALLING edge.
+    FALLING = 8
+
+
+#: Zone motion modes. 0-3 are the legacy vocabulary (cell-config enums);
+#: 4 is new: run in DIRECTION until the ZONE*_TARGET sensor edge, stop in
+#: firmware, report READY. Uses the REQUEST_ID/ack lifecycle like distance.
+MODE_DISTANCE = 0
+MODE_POSITION = 1
+MODE_CONTINUOUS = 2
+MODE_IDLE = 3
+MODE_SENSOR_STOP = 4
 
 
 MASTER_HANDOFF = """\

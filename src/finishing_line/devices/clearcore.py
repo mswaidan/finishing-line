@@ -34,7 +34,15 @@ from dataclasses import dataclass
 
 from ..config.loader import ConveyorKinematics, load_conveyor_kinematics
 from ..core.model import ShutterState, Station, Zone
-from .registers import Command, New
+from .registers import (
+    MODE_CONTINUOUS as _MODE_CONTINUOUS,
+    MODE_DISTANCE as _MODE_DISTANCE,
+    MODE_IDLE as _MODE_IDLE,
+    MODE_SENSOR_STOP as _MODE_SENSOR_STOP,
+    Command,
+    New,
+    SensorTarget,
+)
 
 try:
     from pymodbus.client import ModbusTcpClient
@@ -54,25 +62,25 @@ class _ZoneRegs:
     direction: int
     state: int
     ack: int
+    target: int
 
 
 _ZONES: dict[Zone, _ZoneRegs] = {
     Zone.ZONE1: _ZoneRegs(
         New.ZONE1_MOTION_MODE, New.ZONE1_DISTANCE, New.ZONE1_REQUEST_ID,
         New.ZONE1_DIRECTION, New.ZONE1_STATE, New.ZONE1_REQID_ACK,
+        New.ZONE1_TARGET,
     ),
     Zone.ZONE2: _ZoneRegs(
         New.ZONE2_MOTION_MODE, New.ZONE2_DISTANCE, New.ZONE2_REQUEST_ID,
         New.ZONE2_DIRECTION, New.ZONE2_STATE, New.ZONE2_REQID_ACK,
+        New.ZONE2_TARGET,
     ),
 }
 
 _FAN_CMD = {Station.IF: New.IF_FAN_CMD, Station.FD: New.FD_FAN_CMD}
 _FAN_FEEDBACK = {Station.IF: New.IF_FAN_FEEDBACK, Station.FD: New.FD_FAN_FEEDBACK}
 
-_MODE_DISTANCE = 0
-_MODE_CONTINUOUS = 2
-_MODE_IDLE = 3
 _STATE_READY = 1
 
 _SHUTTER_FROM_FEEDBACK = {0: ShutterState.CLOSED, 1: ShutterState.OPEN, 2: ShutterState.MOVING}
@@ -185,6 +193,38 @@ class ClearCoreClient:
             f"{zone} to ack move {request_id}",
         )
         return steps
+
+    def move_zone_until(
+        self,
+        zone: Zone,
+        *,
+        downstream: bool,
+        sensor: SensorTarget,
+        falling: bool = False,
+        accept_timeout_s: float = 2.0,
+    ) -> None:
+        """Run the zone until the firmware sees the sensor EDGE, stopping in
+        the ClearCore's own loop — no Modbus latency in the positioning chain.
+
+        Edge, not level: the firmware records the sensor's state when it acks
+        the move and stops on the first transition to the target polarity, so
+        arming against a destination still held by a departing part is safe.
+        Returns once acked (running); pair with wait_zone_ready().
+        """
+        regs = _ZONES[zone]
+        target = int(sensor) | (int(SensorTarget.FALLING) if falling else 0)
+        self._write_coil(regs.direction, downstream)
+        self._write_register(regs.target, target)
+        self._write_register(regs.mode, _MODE_SENSOR_STOP)
+
+        self._request_id = self._request_id % 65535 + 1
+        request_id = self._request_id
+        self._write_register(regs.reqid, request_id)
+        self._poll_until(
+            lambda: self._read_register(regs.ack) == request_id,
+            accept_timeout_s,
+            f"{zone} to ack sensor-stop move {request_id}",
+        )
 
     def wait_zone_ready(self, zone: Zone, timeout_s: float = 60.0) -> None:
         regs = _ZONES[zone]

@@ -119,7 +119,8 @@ def test_full_cycle_driven_over_http(rig):
     assert _await(finished, timeout=90.0), (
         f"line did not finish: {client.get('/state').json()['blocked_by']}"
     )
-    assert physics.outfed == 2
+    # Let the final part coast through the physics transit gap to OUT.
+    assert _await(lambda: physics.outfed == 2, timeout=2.0)
 
 
 def test_pause_holds_schedule_but_timers_run(rig):
