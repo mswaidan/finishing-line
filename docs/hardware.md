@@ -64,6 +64,16 @@ truth comes from the two end switches (register 400: 0 closed / 1 open /
   cabinet's digital outputs (DO3 / DO5), as in the legacy program.
 - Safety (e-stops, UR safety config) stays in hardware, outside the ClearCore.
 
+## Sensor selection (decided 2026-07-17)
+
+All presence/handoff/INQ/OUT eyes: **AutomationDirect FDM3-0N-1H** ($41 as of
+2026-07) — the M12 quick-disconnect variant of the FDM3-0N-1A already proven
+on this line (identical optics/price; the -1A/-1H suffix is pigtail vs QD).
+12 mm metal tubular, 100 mm diffuse IR, NPN, light-on/dark-on selectable,
+1 kHz. The budget alternative (plastic F18I2-0N-0E, $37) saves only $4/unit —
+not worth re-qualifying a different optic when trigger repeatability is the
+line's positioning truth. Buy 9 + 2 spares + M12 cordsets.
+
 ## Shopping list deltas vs today's line
 
 New: 4 photo-eyes (handoff ×2, INQ, OUT), 2 shutter end switches, 5/2
