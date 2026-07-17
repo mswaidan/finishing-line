@@ -246,8 +246,14 @@ class FakeClearCore:
         finally:
             writer.close()
 
-    async def _run(self) -> None:
-        server = await asyncio.start_server(self._serve_client, "127.0.0.1", self.port)
+    async def _run(self, bound: threading.Event) -> None:
+        try:
+            server = await asyncio.start_server(self._serve_client, "127.0.0.1", self.port)
+        except OSError as exc:
+            self._start_error = exc
+            bound.set()
+            return
+        bound.set()
         try:
             while not self._stop.is_set():
                 self._tick(time.monotonic())
@@ -259,20 +265,34 @@ class FakeClearCore:
     # ------------------------------------------------------------ lifecycle
 
     def start(self) -> "FakeClearCore":
+        """Start the server; RAISES if the port cannot be bound.
+
+        Failing fast matters more than it looks: a silent bind failure leaves
+        a client happily connecting to whatever stale process still holds the
+        port — a half-alive system that mostly works is far worse to debug
+        than one that refuses to start.
+        """
         self._stop.clear()
-        started = threading.Event()
+        self._start_error: OSError | None = None
+        bound = threading.Event()
 
         def runner() -> None:
             self._loop = asyncio.new_event_loop()
             asyncio.set_event_loop(self._loop)
-            started.set()
-            self._loop.run_until_complete(self._run())
+            self._loop.run_until_complete(self._run(bound))
             self._loop.close()
 
         self._thread = threading.Thread(target=runner, daemon=True, name="fake-clearcore")
         self._thread.start()
-        started.wait(timeout=5.0)
-        time.sleep(0.05)  # let the socket bind before a client races to connect
+        if not bound.wait(timeout=5.0):
+            raise RuntimeError("fake ClearCore never reported bind status")
+        if self._start_error is not None:
+            self._thread.join(timeout=1.0)
+            raise RuntimeError(
+                f"fake ClearCore cannot bind 127.0.0.1:{self.port} — another process "
+                f"holds the port (a stale simulator?). Kill it or pick another port. "
+                f"[{self._start_error}]"
+            ) from self._start_error
         return self
 
     def stop(self) -> None:

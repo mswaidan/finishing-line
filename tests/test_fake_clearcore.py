@@ -180,3 +180,12 @@ def test_presence_and_handoff_sensors_are_inputs(fake, client):
 def test_legacy_status_block_is_readable(client):
     """Rollback observability: the legacy addresses still answer."""
     assert client.read_input_registers(Status.SERVER_STATE, count=1).registers[0] == STATE_READY
+
+
+def test_port_collision_fails_loudly(fake):
+    """A second server on a held port must raise, not half-start. A silent
+    bind failure leaves clients talking to whatever stale process owns the
+    port — the worst possible failure mode to debug.
+    """
+    with pytest.raises(RuntimeError, match="cannot bind"):
+        FakeClearCore(port=PORT).start()
