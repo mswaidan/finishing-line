@@ -1,0 +1,151 @@
+ Program
+   Robot Program
+     Main
+       MoveJ
+         Clear
+         Zero FT Sensor
+       Work≔CubeFront
+       Call SandFront
+       Call SandRebate
+       Work≔SandBack
+       Call SandFront
+       MoveJ
+         SprayClear
+         Zero FT Sensor
+       Call SprayFront
+       Call SprayRebate
+     'Chamfer'
+   Event digital_in[1]≠ True 
+     Set DO[0]=Off
+     Set DO[1]=Off
+     Halt
+   SandRebate
+     sandRebate
+       MoveJ
+         Clear
+         MoveJ
+           Waypoint_26
+         Zero FT Sensor
+         MoveL
+           ready_left
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_44
+           Stop tool
+           Waypoint_4
+           Clear
+           Waypoint_2
+           Waypoint_3
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_8
+             Waypoint_5
+             Direction: Tool Z-
+               Until (distance)
+           Stop tool
+           Waypoint_17
+           MoveJ
+             Waypoint_26
+           MoveJ
+             Waypoint_31
+             Zero FT Sensor
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_7
+           Stop tool
+           Waypoint_13
+           Waypoint_9
+           Clear
+   SprayFront
+     SprayFront
+       MoveJ
+         SprayClear
+       MoveJ
+         Waypoint_10
+         Set DO[1]=On
+       MoveL
+         Waypoint_12
+         Set DO[1]=Off
+       MoveJ
+         Waypoint_21
+         Set DO[1]=On
+       MoveL
+         Waypoint_22
+         Set DO[1]=Off
+       MoveJ
+         Waypoint_23
+         Set DO[1]=On
+       MoveL
+         Waypoint_24
+         Set DO[1]=Off
+       MoveJ
+         Waypoint_38
+         Set DO[1]=On
+       MoveL
+         Waypoint_25
+         Set DO[1]=Off
+       MoveJ
+         SprayClear
+   SprayRebate
+     SprayRebate
+       MoveJ
+         SprayClear
+       MoveJ
+         Waypoint_28
+         Set DO[1]=On
+       MoveL
+         Waypoint_27
+         Set DO[1]=Off
+       MoveJ
+         Waypoint_29
+         Set DO[1]=On
+       MoveL
+         Waypoint_30
+         Set DO[1]=Off
+       MoveJ
+         SprayClear
+       MoveJ
+         Waypoint_32
+         Set DO[1]=On
+       MoveL
+         Waypoint_33
+         Set DO[1]=Off
+       MoveJ
+         SprayClear
+   SandFront
+     sandFront
+       MoveJ
+         Waypoint_35
+       MoveL
+         Waypoint_1
+         Zero FT Sensor
+         Find Surface
+           'Add Stop conditions from the Find Surface node'
+         Start tool
+         Wait: 0.5
+       MoveL
+         Force
+           Waypoint_34
+           Waypoint_37
+           Waypoint_36
+           Waypoint_1
+           Stop tool
+         Direction: Tool Z-
+           Until (distance)
+       MoveJ
+         Waypoint_35
+   StartSpray
+     Set DO[1]=On
+     Wait: 0.3
+   stopSpray
+     Set DO[1]=Off
+     Wait: 0.3

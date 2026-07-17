@@ -1,0 +1,27 @@
+def Move_Continuous(direction):
+  mm_old = modbus_get_signal_status("MOTION_MODE_LOC")
+  dir_old = modbus_get_signal_status("DIRECTION_LOC")
+  if (mm_old != 2):
+    modbus_set_output_register("MOTION_MODE_LOC",2,False)
+    while(mm_old == modbus_get_signal_status("MOTION_MODE_LOC")):
+      sync()
+    end
+    while (not(modbus_get_signal_status("MOTION_MODE_LOC")==modbus_get_signal_status("MOTION_MODE_REM"))):
+      sync()
+    end
+  end
+  if direction == "forward":
+    dir_new = True
+  else:
+    dir_new = False
+  end
+  if (dir_new != dir_old):
+    modbus_set_output_register("DIRECTION_LOC",dir_new,False)
+    while(dir_old == modbus_get_signal_status("DIRECTION_LOC")):
+      sync()
+    end
+    while (not(modbus_get_signal_status("DIRECTION_LOC")==modbus_get_signal_status("DIRECTION_REM"))):
+      sync()
+    end
+  end
+end

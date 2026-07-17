@@ -1,0 +1,27 @@
+<URProgram name="ghTest" installation="default" installationRelativePath="default" createdIn="5.11.11" lastSavedIn="5.11.11">
+  <children>
+    <MainProgram runOnlyOnce="true" InitVariablesNode="false">
+      <children>
+        <Script type="File">
+          <cachedContents>def Program():
+  DefaultGHToolTcp = p[-0.108, 0.063, 0.084, -0.61394, 0.61394, 1.48219]
+  DefaultGHToolWeight = 0
+  DefaultGHToolCog = [-0.108, 0.063, 0.084]
+  DefaultSpeed = 0.1
+  DefaultZone = 0
+  set_tcp(DefaultGHToolTcp)
+  set_payload(DefaultGHToolWeight, DefaultGHToolCog)
+  movej([-0.6908, 2.8083, 1.9365, -2.5173, -1.1034, -2.6126], a=3.1416, v=0.3142, r=DefaultZone)
+  movel(p[0.19077, 0.05611, 0.6509, 0, 0, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.55272, 0.05611, 0.6509, 0, 0, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.55272, -0.29314, 0.6509, 0, 0, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.19077, -0.29314, 0.6509, 0, 0, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+end
+Program()
+</cachedContents>
+          <file>ghTest.script</file>
+        </Script>
+      </children>
+    </MainProgram>
+  </children>
+</URProgram>

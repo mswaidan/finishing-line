@@ -1,0 +1,67 @@
+ Program
+   Init Variables
+   BeforeStart
+     MoveJ
+       start
+   Robot Program
+     Loop
+       If cycle_count≟3
+         MoveJ
+           Waypoint_4
+           Popup: clean nozzle
+           cycle_count≔0
+       Model_Number≔'Enter the model number.'
+       Switch Model_Number
+         Case 1
+           Call SubProgram_1
+           cycle_count≔cycle_count+1
+         Case 2
+           Call SubProgram_2
+           cycle_count≔cycle_count+1
+         Case 3
+           Call SubProgram_3
+           cycle_count≔cycle_count+1
+         Default Case
+           Popup: Invalid part number
+   SubProgram_1
+     MoveJ
+       Approach_1
+       start_model_1
+     'MoveL'
+     MoveP
+       point_2_model_1
+       CircleMove
+         point_3_model_1
+         point_4_model_1
+       exit_model_1
+   SubProgram_2
+     MoveJ
+       start_model_2
+     MoveP
+       point_2_model_2
+       point_3_model_2
+       point_4_model_2
+       point_5_model_2
+       point_6_model_2
+       point_7_model_2
+       exit_model_2
+   SubProgram_3
+     MoveJ
+       start_model_3
+     MoveP
+       point_2_model_3
+       CircleMove
+         point_3_model_3
+         point_4_model_3
+       point_5_model_3
+       CircleMove
+         point_6_model_3
+         point_7_model_3
+       CircleMove
+         point_8_model_3
+         point_9_model_3
+       CircleMove
+         ViaPoint_1
+         EndPoint_1
+       Waypoint_1
+       Waypoint_2

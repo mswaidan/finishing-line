@@ -1,0 +1,58 @@
+ Program
+   Robot Program
+     Wait: 0.01
+   'LoadCube'
+   Event PinsBtn≟ True 
+     Call Spray
+   Event GoBtn≟ True 
+     Call Sand
+     Call Sand
+     Call Spray
+     Call Spray
+   Spray
+     Spray
+       Set
+       MoveJ
+         Waypoint_3
+       MoveL
+         Waypoint_2
+         Set SprayerOn=On
+         Waypoint_4
+         Set SprayerOn=Off
+         Waypoint_5
+         Set SprayerOn=On
+         Waypoint_6
+         Set SprayerOn=Off
+       MoveJ
+         Waypoint_11
+       MoveL
+         Waypoint_7
+         Set SprayerOn=On
+         Waypoint_8
+         Set SprayerOn=Off
+         Waypoint_9
+         Set SprayerOn=On
+         Waypoint_10
+         Set SprayerOn=Off
+         Direction: Base Z-
+           Until (distance)
+       'MoveJ'
+   Sand
+     Sand
+       MoveJ
+         Waypoint_1
+       Wait: 1.0
+       MoveL
+         Direction: Base Z+
+           Until (tool_contact_detection)
+       Start tool
+       Force
+         4-Point Path
+           Point 1
+           Point 2
+           Point 3
+           Point 4
+       Stop tool
+       MoveL
+         Direction: Base Z-
+           Until (distance)

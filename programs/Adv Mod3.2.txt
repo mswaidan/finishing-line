@@ -1,0 +1,21 @@
+ Program
+   BeforeStart
+     Current_Pos≔get_actual_tcp_pose()
+     Safe_Position≔pose_add(Current_Pos, p[0,0,(100/1000),0,0,0])
+     MoveJ
+       Safe_Position
+   Robot Program
+     MoveJ
+       Wait_Point
+     Camera Data
+       X_Position≔'X Position'
+       Y_Position≔'Y Position'
+       RZ_Position≔'RZ Positon'
+     Calc Pick Position
+       Camera_offset≔p[(X_Position/-1000),(Y_Position/1000),0,0,0,d2r(RZ_Position)]
+       Pick_Position≔pose_trans(CameraPOV, Camera_offset)
+       Pick_Entry≔pose_add(Pick_Position, p[0,0,(50/1000),0,0,0])
+       MoveJ
+         Pick_Entry
+         Pick_Position
+         Pick_Entry

@@ -1,0 +1,14 @@
+def Conveyor_Move_mm(distance):
+  modbus_set_output_signal("ROBOT_SENDING", True, False)
+  modbus_set_output_register("MOTION_MODE", 0, False)
+  distance = mm_to_steps(distance)
+  if distance < 0:
+  distance = distance * -1
+  modbus_set_output_signal("DIRECTION", False, False)
+  else:
+  modbus_set_output_signal("DIRECTION", True, False)
+  end
+  modbus_set_output_register("DISTANCE", distance, False)
+  Set_Request_Id()
+  modbus_set_output_signal("ROBOT_SENDING", False, False)
+end

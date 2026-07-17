@@ -1,0 +1,35 @@
+# URSim — Universal Robots' official offline simulator, e-Series Polyscope.
+#
+#   docker compose -f docker-compose.ursim.yml up -d
+#   browser -> http://localhost:6080/vnc.html   (Polyscope pendant UI)
+#   python scripts/ursim_smoke.py               (dashboard smoke test)
+#
+# This runs the REAL Polyscope software: ur_rtde and the Dashboard server
+# connect exactly as they would to the cabinet. What it does NOT simulate is
+# physics — no tool contact, no force feedback — so force_mode/tool_contact
+# code executes but does not behave. See docs/simulation.md for what each
+# stage can and cannot validate.
+#
+# First run: the pendant UI boots to "Confirm safety configuration" -> confirm,
+# then power on + brake release from the bottom-left status button. Programs
+# persist in the ursim-programs volume across restarts.
+
+services:
+  ursim:
+    image: universalrobots/ursim_e-series
+    container_name: ursim
+    environment:
+      - ROBOT_MODEL=UR5
+    ports:
+      - "6080:6080"     # noVNC — pendant UI in the browser
+      - "5900:5900"     # VNC (optional, for a native viewer)
+      - "29999:29999"   # Dashboard server — load/play/stop, protective-stop recovery
+      - "30001:30001"   # primary client interface
+      - "30002:30002"   # secondary client interface
+      - "30003:30003"   # real-time interface
+      - "30004:30004"   # RTDE — what ur_rtde uses
+    volumes:
+      - ursim-programs:/ursim/programs
+
+volumes:
+  ursim-programs:

@@ -1,0 +1,106 @@
+ Program
+   Init Variables
+   BeforeStart
+     Gripper Reset and Activate
+     MoveJ
+       Waypoint_1
+       Home
+   Robot Program
+     MoveJ
+       cycle_time: Reset
+       cycle_time: Start
+       Gripper Close (1)
+       Part_Found≔0
+       Loop Part_Found≟0
+         Pallet_1
+           Patterns
+             Grid_Pattern_1
+               CornerItem_1
+               CornerItem_2
+               CornerItem_3
+               CornerItem_4
+           Layers
+           At Each Item
+             Generated Movements
+               MoveJ
+                 Approach
+               MoveL
+                 ToolActionPoint
+                   Until (tool_contact_detection)
+                     Gripper Move37mm (1)
+                     Direction: referencePoint Z+
+                       Until (distance)
+                     Gripper Close (1)
+                     Part_Found≔1
+                     MoveL
+                       Exit_1
+                   Until (reached_waypoint)
+                     Wait: 0
+               Tool action
+                 Wait: 0
+               MoveL
+                 Exit_1
+           Action after palletizing
+             If Part_Found≟0
+               Home
+               Halt
+       Conveyor_Trans
+       Conv_Drop_Entry
+       Conveyor_Drop
+       Set Payload: Hande_Payload
+       Gripper Move37mm (1)
+       Conv_Drop_Entry
+       Wait Left_Sensor=HI
+       Set Run_Conveyor=On
+       Conv_Pick_Entry
+       Conv_Pick
+       Wait Right_Sensor=HI
+       Wait: 0.3
+       Set Run_Conveyor=Off
+       Gripper Close (1)
+       Conv_Pick_Entry
+       If Cycle_Count≟3
+         Call SubProgram_1
+       Pallet_Load
+         Patterns
+           Grid_Pattern_2
+             CornerItem_5
+             CornerItem_6
+             CornerItem_7
+             CornerItem_8
+         Layers
+         At Each Item
+           Generated Movements
+             MoveJ
+               Approach_1
+             MoveL
+               ToolActionPoi_1
+             Tool action
+               Gripper Move37mm (1)
+             MoveL
+               Exit_2
+         Action after palletizing
+           Home
+           Halt
+       If Pallet_1_cnt≟1
+         Halt
+       cycle_time: Stop
+       Cycle_Count≔Cycle_Count+1
+   SubProgram_1
+     MoveJ
+       Inspection
+       Wait: 2.0
+       Cycle_Count≔0
+   Thread_1
+     Robot_Force≔force()
+     If LL_Inintial≟ True 
+       Set LL_Light=On
+     Else
+       Set LL_Light=Off
+     sync()
+   Thread_2
+     If LR_Freedrive≟ True 
+       Set LR_Light=On
+     Else
+       Set LR_Light=Off
+     sync()

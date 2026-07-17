@@ -1,0 +1,12 @@
+def Position_Move:
+
+  mm_old = modbus_get_signal_status("MOTION_MODE_LOC")
+  modbus_set_output_register("MOTION_MODE_LOC",1,False)
+  while(mm_old == modbus_get_signal_status("MOTION_MODE_LOC")):
+    sync()
+  end
+
+  
+end
+
+ 

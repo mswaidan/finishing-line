@@ -1,0 +1,27 @@
+ Program
+   BeforeStart
+     Set
+     MoveJ
+       Safe
+     Set
+     Swap_TCP≔ False 
+   Robot Program
+     MoveJ
+       Glue_entry
+       Glue_Start
+     MoveP
+       Glue_Pos_2
+       CircleMove
+         Circle_Mid
+         Glue_end
+       Glue_entry
+     MoveJ
+       Safe
+     If Swap_TCP≟ False 
+       Set
+       Swap_TCP≔ True 
+     Else
+       Set
+       Swap_TCP≔ False 
+     MoveJ
+       Safe

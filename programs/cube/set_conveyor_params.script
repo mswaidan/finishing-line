@@ -1,0 +1,26 @@
+def Set_Conveyor_Params(velocity, acceleration):
+
+  vel_old = modbus_get_signal_status("VELOCITY_LOCAL")
+  acc_old = modbus_get_signal_status("ACC_LOCAL")
+
+  if (vel_old != velocity):
+    modbus_set_output_register("VELOCITY_LOCAL", velocity, False)  
+    while(vel_old == modbus_get_signal_status("VELOCITY_LOCAL")):
+      sync()
+    end    
+    while (not(modbus_get_signal_status("VELOCITY_LOCAL")==modbus_get_signal_status("VELOCITY_REMOTE"))):
+      sync()
+    end
+  end
+
+  if (acc_old != acceleration):
+    modbus_set_output_register("ACC_LOCAL", acceleration, False)
+    while(acc_old == modbus_get_signal_status("ACC_LOCAL")):
+      sync()
+    end
+    while (not(modbus_get_signal_status("ACC_LOCAL")==modbus_get_signal_status("ACC_REMOTE"))):
+      sync()
+    end
+  end
+  
+end

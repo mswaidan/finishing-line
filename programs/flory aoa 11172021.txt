@@ -1,0 +1,20 @@
+ Program
+   BeforeStart
+     'Find Contact Offset'
+   Robot Program
+     MoveJ
+       home
+       Waypoint_1
+       Force
+         'Wait: 1.0'
+         Start tool
+         '4-Point Path'
+         Multipoint Path
+           MoveJ to waypoint         
+           Line to waypoint 2         
+           Line to waypoint 3         
+           Line to waypoint 4         
+           Line to waypoint 5         
+       MoveJ
+         Waypoint_1
+         Stop tool

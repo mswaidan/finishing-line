@@ -1,0 +1,8 @@
+def Inches_To_Steps(distance):
+teeth = 28
+pitch = 5
+degreesPerStep = 1.8
+microsteps = 8
+return floor(distance * teeth/pitch)
+
+end

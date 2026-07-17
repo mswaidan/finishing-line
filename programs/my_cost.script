@@ -1,0 +1,4 @@
+def my_cost(water,quantity):
+result=water*quantity
+return result
+end

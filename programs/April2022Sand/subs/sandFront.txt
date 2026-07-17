@@ -1,0 +1,21 @@
+ Program
+   Robot Program
+     sandFront
+       Set
+       MoveL
+         Waypoint_2
+         Zero FT Sensor
+         Direction: Tool Z+
+           Until (tool_contact_detection)
+         Start tool
+         Wait: 1.0
+       MoveL
+         Zero FT Sensor
+         Force
+           Waypoint_3
+           Waypoint_4
+           Waypoint_5
+           Waypoint_6
+           Stop tool
+         Direction: Tool Z-
+           Until (distance)

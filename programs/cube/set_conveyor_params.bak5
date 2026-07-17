@@ -1,0 +1,7 @@
+def Set_Conveyor_Params(velocity, acceleration):
+
+  vel_old = modbus_get_signal_status("VELOCITY_LOCAL")
+  acc_old = modbus_get_signal_status("ACC_LOCAL")
+
+  
+end

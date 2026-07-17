@@ -1,0 +1,287 @@
+ Program
+   BeforeStart
+     Script: set_conveyor_params.script
+     Script: position_move.script
+     Script: distance_move.script
+     'Script: mm_move.script'
+     Script: continuous_move.script
+     Script: idle_move.script
+     Script: request_id.script
+     Script: steps_per_inch.script
+     Script: mm_to_steps.script
+     Set_Conveyor_Params(1600, 16000)
+     Move_Idle()
+     Script: select_job.script
+     loaded≔0
+     dried2≔False
+     Set BRUSH_ON_LOCAL= False 
+     'MoveJ'
+   Robot Program
+     MoveJ
+       Sand_Base
+     Loop RUN==False
+       read_job()
+       If MOTION_MODE_LOC ≠ 3
+         Move_Idle()
+       If FEED_CONV_LOCAL≟ True 
+         Set FEED_CONV_LOCAL= False 
+       sync()
+     Folder
+       Loop RUN≟ True  and JOB≟7
+         read_job()
+         Move_Continuous("forward")
+         Set FEED_CONV_LOCAL= True 
+     Load Workpiece
+       Loop WORK_AT_ZERO== False  and dried2 == False and RUN == True
+         If loaded≟ 0  and RUN ≟  True 
+           If MOTION_MODE_LOC != 2
+             Set DIRECTION_LOCAL= True 
+             Move_Continuous("forward")
+           sync()
+         If FEED_CONV_LOCAL ≟ False   and RUN ≟  True  and loaded≟ False 
+           Set FEED_CONV_LOCAL= True 
+           Wait ONLOAD=HI
+           Wait ONLOAD=LO
+           Set FEED_CONV_LOCAL= False 
+           loaded≔1
+         sync()
+       Move_Idle()
+       Set FEED_CONV_LOCAL= False 
+     If RUN == True
+       read_job()
+       Sand
+         MoveJ
+           Sand_Base
+         MoveL
+           Direction: Base Z+
+             Until (tool_contact_detection)
+           Zero FT Sensor
+           Start tool
+           If dried2≟ False 
+             Force
+               Conveyor_Move_mm(width-12)
+               Wait SERVER_STATE==1
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+                 newPosition
+               Conveyor_Move_mm(-width+12)
+               Wait SERVER_STATE==1
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+                 newPosition
+               Stop tool
+           Else
+             Force
+               Conveyor_Move_mm(width-12)
+               Wait SERVER_STATE==1
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+                 newPosition
+               Conveyor_Move_mm(-width+12)
+               Wait SERVER_STATE==1
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+                 newPosition
+               Stop tool
+         MoveJ
+           Sand_Base
+       45 Sand
+         If JOB == 3
+           Conveyor_Move_mm((width-12)/3)
+           Wait SERVER_STATE==1
+           MoveL
+             Direction: Base Z+
+               Until (tool_contact_detection)
+             Start tool
+             Force
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+                 newPosition
+               Stop tool
+             Direction: Base Z-
+               Until (distance)
+             Conveyor_Move_mm((width-12)/3)
+             Wait SERVER_STATE==1
+             Direction: Base Z+
+               Until (tool_contact_detection)
+             Force
+               Start tool
+               moveHeight
+                 currentPosition≔get_actual_tcp_pose()
+                 newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+                 newPosition
+               Stop tool
+             Direction: Base Z-
+               Until (distance)
+             Conveyor_Move_mm(-(width-12)*2/3)
+             Wait SERVER_STATE==1
+       SC 3 and 4 Sand
+         If JOB == 5 or JOB == 6
+           Conveyor_Move_mm((width-12)/2)
+           Wait SERVER_STATE==1
+           MoveL
+             Direction: Base X-
+               Until (distance)
+             Direction: Base Z+
+               Until (tool_contact_detection)
+             Start tool
+             Force
+               Direction: Base X-
+                 Until (distance)
+               Stop tool
+             Direction: Base Z-
+               Until (distance)
+             Conveyor_Move_mm(-(width-12)/2)
+             Wait SERVER_STATE==1
+       Spray Vertical
+         MoveJ
+           Spray_Base
+           If JOB == 2
+             MoveL
+               Direction: Base Z+
+                 Until (distance)
+           If JOB == 7
+             MoveL
+               Direction: Base Z+
+                 Until (distance)
+           Set SprayerOn=On
+         MoveL
+           Conveyor_Move_mm(width-12)
+           Wait SERVER_STATE==1
+           moveHeight
+             currentPosition≔get_actual_tcp_pose()
+             newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+             newPosition
+           Conveyor_Move_mm(-width+12)
+           Wait SERVER_STATE==1
+           moveHeight
+             currentPosition≔get_actual_tcp_pose()
+             newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+             newPosition
+             Set SprayerOn=Off
+         MoveJ
+           Spray_Base
+       45 Spray
+         If JOB == 3
+           MoveJ
+             Spray_Base
+           MoveL
+             Conveyor_Move_mm(width/3)
+             Wait SERVER_STATE==1
+             Set SprayerOn=On
+             moveHeight
+               currentPosition≔get_actual_tcp_pose()
+               newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+               newPosition
+             Set SprayerOn=Off
+             Conveyor_Move_mm(width/3)
+             Wait SERVER_STATE==1
+             Set SprayerOn=On
+             moveHeight
+               currentPosition≔get_actual_tcp_pose()
+               newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+               newPosition
+             Set SprayerOn=Off
+           MoveJ
+             Spray_Base
+       SC 3 and 4 Spray
+         If JOB == 5 or JOB == 6
+           MoveJ
+             Spray_Base
+           Conveyor_Move_mm((width-12)/2)
+           Wait SERVER_STATE==1
+           MoveL
+             Direction: Base X-
+               Until (distance)
+             Set SprayerOn=On
+             Direction: Base X-
+               Until (distance)
+             Set SprayerOn=Off
+             Conveyor_Move_mm(-(width-12)/2)
+             Wait SERVER_STATE==1
+       Cube
+         If JOB==1
+           Spray Horizontal
+             MoveJ
+               Waypoint_1
+               Set SprayerOn=On
+               Conveyor_Move_mm(width-12)
+               Wait SERVER_STATE==1
+               Set SprayerOn=Off
+               Waypoint_2
+               MoveL
+                 Set SprayerOn=On
+                 moveHeight
+                   currentPosition≔get_actual_tcp_pose()
+                   newPosition≔pose_add(currentPosition, p[-height/1000,0,0,0,0,0])
+                   newPosition
+                 Set SprayerOn=Off
+               Conveyor_Move_mm(-width+12)
+               Waypoint_3
+               Wait SERVER_STATE==1
+               MoveL
+                 Set SprayerOn=On
+                 moveHeight
+                   currentPosition≔get_actual_tcp_pose()
+                   newPosition≔pose_add(currentPosition, p[height/1000,0,0,0,0,0])
+                   newPosition
+                 Set SprayerOn=Off
+       MoveJ
+         Sand_Base
+       Clean Spray
+         MoveJ
+           Sand_Base
+           Clean_Brush
+           MoveL
+             Direction: Base Z+
+               Until (tool_contact_detection)
+           Wait: 1.0
+           Set BRUSH_ON_LOCAL= True 
+           timer_brush: Start
+       If dried2≟ False 
+         Dry
+           timer_dry: Start
+           Conveyor_Move_mm(width+500)
+           Wait SERVER_STATE==1
+           Loop timer_dry<165
+             Conveyor_Move_mm(-(width/2))
+             Wait SERVER_STATE==1
+             Conveyor_Move_mm(width/2)
+             Wait SERVER_STATE==1
+           Move_Continuous("reverse")
+           Wait WORK_AT_ZERO=HI
+           Wait WORK_AT_ZERO=LO
+           Move_Continuous("forward")
+           Wait WORK_AT_ZERO=HI
+           dried2≔ True 
+           timer_dry: Stop
+           timer_dry: Reset
+           Move_Idle()
+       Else
+         Folder
+           Loop OFFLOAD≠ False 
+             Move_Continuous("forward")
+     'Motion Test'
+     sync()
+   Thread_1
+     If RUN == False
+       If MOTION_MODE_LOC ≠3
+         Move_Idle()
+       If FEED_CONV_LOCAL≟ True 
+         Set FEED_CONV_LOCAL= False 
+       sync()
+     Else
+       sync()
+   Thread_2
+     If timer_brush > 30
+       Set BRUSH_ON_LOCAL= False 
+       Wait: 1.0
+       timer_brush: Stop
+       timer_brush: Reset
+       'If ...'
+     sync()

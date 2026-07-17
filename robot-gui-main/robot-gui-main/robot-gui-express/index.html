@@ -1,0 +1,243 @@
+<html>
+<style>
+  body {
+    padding: 32px;
+  }
+
+  .container {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    align-content: center;
+    justify-content: center;
+    grid-template-columns: 15% 5% 35% 5% 35%;
+    grid-template-rows: 50% 50%;
+    align-items: center;
+    font-family: sans-serif;
+  }
+
+  .item {
+    height: 100%;
+    width: 100%;
+    border: black;
+    border-style: none;
+    padding: 10px;
+  }
+
+  .item-1 {
+    border-style: none;
+    grid-column: 1;
+    grid-row: span 2;
+  }
+
+  .item-2 {
+    grid-column: 3 / -1;
+  }
+
+  .item-4 {
+    grid-column: 3;
+  }
+
+  .item-3 {
+    grid-column: 5;
+  }
+
+  .button {
+    border: solid;
+    border-width: 3px;
+    border-color: black;
+    border-radius: 12px;
+    color: black;
+    background-color: white;
+    padding: 15px 32px;
+    text-align: center;
+    text-decoration: none;
+    display: inline-block;
+    font-size: 32px;
+    margin: 4px 2px;
+    cursor: pointer;
+  }
+
+  .button-active {
+    background-color: black;
+    color: white;
+  }
+
+  .button-go {
+    background-color: white;
+    border-color: rgb(18, 125, 127);
+    color: rgb(18, 125, 127);
+  }
+
+  .button-go-active {
+    background-color: rgb(18, 125, 127);
+    border-color: rgb(18, 125, 127);
+    color: white;
+  }
+
+  .button-stop {
+    background-color: white;
+    border-color: rgb(238, 62, 37);
+    color: rgb(238, 62, 37);
+  }
+
+  .button-stop-active {
+    background-color: rgb(238, 62, 37);
+    border-color: rgb(238, 62, 37);
+    color: white;
+  }
+
+  .logo {
+    min-width: 150px;
+    min-height: 150px;
+    max-width: 200px;
+    max-height: 200px;
+    padding: 32px;
+    display: block;
+    margin: auto;
+  }
+
+  .clock {
+    display: flex;
+    justify-content: center;
+    margin: 12px;
+  }
+</style>
+<title>SWG Robot Control</title>
+
+<body>
+  <div class="container">
+    <div class="item item-1 logo">
+      <object data="/public/SWG-YELLOW.svg" type="image/svg+xml"></object>
+      <div class="clock" id="datetime"></div>
+    </div>
+    <div class="item item-4">
+      <h1>Conveyor Control</h1>
+      <form id="run-form">
+        <button id="conveyor-button-go" class="button button-go" type="submit" name="job" value="go">Go</button>
+        <button id="conveyor-button-stop" class="button button-stop button-stop-active" type="submit" name="job"
+          value="stop">Stop</button>
+      </form>
+    </div>
+    <div class="item item-3">
+      <h1>Robot Control</h1>
+      <div>Power: <span id='robotPower'>?</span></div>
+      <div>Enabled: <span id='robotEnabled'>?</span></div>
+      <div>Program running: <span id='robotRunning'>?</span></div>
+      <div>Program paused: <span id='robotPaused'>?</span></div>
+    </div>
+    <div class="item  item-2">
+      <h1>Job Picker</h1>
+      <form id="job-form">
+        <button id="job-button-1" class="button button-active" type="submit" name="job" value="1">Cube</button>
+        <button id="job-button-2" class="button" type="submit" name="job" value="2">Browser</button>
+        <button id="job-button-3" class="button" type="submit" name="job" value="3">45</button>
+        <button id="job-button-4" class="button" type="submit" name="job" value="4">Stereocab 2</button>
+        <button id="job-button-5" class="button" type="submit" name="job" value="5">Stereocab 3</button>
+        <button id="job-button-6" class="button" type="submit" name="job" value="6">Stereocab 4</button>
+      </form>
+    </div>
+  </div>
+  <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+  <script>
+    const socket = io()
+
+    const jobForm = document.getElementById('job-form')
+    const runForm = document.getElementById('run-form')
+
+    var activeJob = 1
+    var conveyorState = 0
+
+    let stateMsg
+
+    jobForm.addEventListener('submit', (e) => {
+      e.preventDefault()
+      if (e.submitter.value) {
+        socket.emit('job message', e.submitter.value)
+      }
+    })
+    runForm.addEventListener('submit', (e) => {
+      e.preventDefault()
+      if (e.submitter.value) {
+        socket.emit('run message', e.submitter.value)
+      }
+    })
+
+    socket.on('active job', (msg) => {
+      var current = document.getElementsByClassName("button-active")[0]
+      current.classList.remove("button-active")
+      var newJob = document.getElementById(`job-button-${msg}`)
+      newJob.classList.add("button-active")
+      activeJob = msg
+    })
+    socket.on('conveyor state', (msg) => {
+      var goButton = document.getElementById("conveyor-button-go")
+      var stopButton = document.getElementById("conveyor-button-stop")
+      goButton.classList.remove("button-go-active")
+      stopButton.classList.remove("button-stop-active")
+      console.log(msg)
+      if (msg == "go") {
+        goButton.classList.add("button-go-active")
+      }
+      if (msg == "stop") {
+        stopButton.classList.add("button-stop-active")
+      }
+      conveyorState = msg
+    })
+    socket.on('robot state', (msg) => {
+      stateMsg = msg
+      console.log("isRealRobotConnected: " + stateMsg[0])
+      console.log("isRealRobotEnabled: " + stateMsg[1])
+      console.log("isRobotPowerOn: " + stateMsg[2])
+      console.log("isEmergencyStopped: " + stateMsg[3])
+      console.log("isProtectiveStopped: " + stateMsg[4])
+      console.log("isProgramRunning: " + stateMsg[5])
+      console.log("isProgramPaused: " + stateMsg[6])
+      console.log("\n")
+      document.getElementById("robotPower").innerHTML = isRobotPowerOn()
+      document.getElementById("robotEnabled").innerHTML = isRobotEnabed()
+      document.getElementById("robotRunning").innerHTML = isRobotRunning()
+      document.getElementById("robotPaused").innerHTML = isRobotPaused()
+
+    })
+
+    function isRobotPowerOn () {
+      if (stateMsg) {
+        if (stateMsg[2] == true) return true
+      }
+      return false
+    }
+
+    function isRobotEnabed () {
+      if (stateMsg) {
+        if (stateMsg[1] == true) return true
+      }
+      return false
+    }
+
+    function isRobotRunning () {
+      if (stateMsg) {
+        if (stateMsg[5] == 1) return true
+      }
+      return false
+    }
+
+    function isRobotPaused () {
+      if (stateMsg) {
+        if (stateMsg[6] == 1) return true
+      }
+      return false
+    }
+  </script>
+</body>
+
+</html>
+<script>
+  function showTime () {
+    var now = new Date()
+    var datetime = now.toLocaleTimeString()
+    document.getElementById("datetime").innerHTML = datetime
+    setTimeout(showTime, 1000)
+  }
+  showTime();
+</script>

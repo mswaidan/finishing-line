@@ -1,0 +1,26 @@
+def Distance_Move(distance):
+  mm_old = modbus_get_signal_status("MOTION_MODE_LOC")
+  dist_old = modbus_get_signal_status("DISTANCE_LOCAL")
+  if (mm_old != 0):
+    modbus_set_output_register("MOTION_MODE_LOC",0,False)
+    while(mm_old == modbus_get_signal_status("MOTION_MODE_LOC")):
+      sync()
+    end
+    while (not(modbus_get_signal_status("MOTION_MODE_LOC")==modbus_get_signal_status("MOTION_MODE_REM"))):
+      sync()
+    end
+  end
+  distance = mm_to_steps(distance)
+  if distance < 0:
+    distance = distance * -1
+  end
+if (dist_old != distance):
+    modbus_set_output_register("DISTANCE_LOCAL",distance,False)
+    while(dist_old == modbus_get_signal_status("DISTANCE_LOCAL")):
+      sync()
+    end
+    while (not(modbus_get_signal_status("DISTANCE_LOCAL")==modbus_get_signal_status("DISTANCE_REMOTE"))):
+      sync()
+    end
+  end 
+end

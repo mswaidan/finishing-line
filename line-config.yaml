@@ -1,0 +1,105 @@
+# =============================================================================
+# Finishing line — process configuration for the interleaved two-fan schedule.
+#
+# Companion to cell-config.yaml. The split matters:
+#
+#   cell-config.yaml  — ARCHAEOLOGY. Constants extracted from the old Polyscope
+#                       program and ClearCore firmware. Tuned on the real line,
+#                       proven by 200 parts/week. Do not re-derive these.
+#   line-config.yaml  — THIS FILE. New process parameters for the rewrite.
+#                       Some are measured, some are assumed. The `provenance`
+#                       key on each says which, and nothing here should be
+#                       trusted as tuned until it says `measured`.
+# =============================================================================
+
+process:
+  # Paces the entire line — the beat IS the flash time. Every throughput number
+  # in docs/finishing-line-state-machine.md follows from this one value.
+  flash_seconds: 180.0
+  provenance_flash: assumed   # OPEN: confirm on water-based lacquer.
+                              # The old line's tuned dry was 165 s (cell-config
+                              # timings.dry_duration_s) but that was one dry
+                              # cycle after a single coat, not an inter-coat
+                              # flash. Not the same number; not evidence.
+
+  coats: 2
+
+  # Duration the IF fan is held off while the gun is live at S during P3.
+  #
+  # This is the most expensive unmeasured number in the project. Because flash
+  # timers bank fan-on seconds only, P3 stretches by exactly this much, and the
+  # period becomes 780 + burst seconds for 2 parts. Every second here costs
+  # 0.5 s/part. The 6.5 min/part target requires this to be 0.
+  spray_burst_pause_s: 30.0
+  provenance_burst: assumed   # OPEN: measure, then minimise.
+
+  # Nominal only. The controller is event-driven and never enforces these — they
+  # exist so the simulator can predict throughput and so the HMI can show
+  # "running long". See the beat-advance note in core/machine.py.
+  nominal:
+    transfer_s: 15.0
+    provenance_transfer: assumed   # OPEN: stopwatch on the current line (§8).
+    robot_coat1_s: 90.0            # sand + spray
+    robot_coat2_s: 45.0            # denib + spray
+    beat_s: 195.0
+    period_s: 780.0                # + spray_burst_pause_s in practice
+
+  denib:
+    # OPEN (§8): not confirmed that coat 2 gets a denib pass, nor its duration.
+    enabled: true
+    duration_s: 20.0
+    provenance: assumed
+
+stations:
+  inq_capacity: 4
+
+  # ALL FOUR GAPS MUST BE EQUAL.
+  #
+  # Zone 1 spans INQ<->IF, zone 2 spans S<->FD<->OUT, and nothing spans IF<->S —
+  # a part crosses by handoff, both belts running together until a sensor
+  # confirms the transfer. Since every transition crosses that boundary, every
+  # transition is one synchronised run of both belts, and one belt moves every
+  # part on it by one distance.
+  #
+  # Sensor-terminating the run measures that distance; it does not decouple the
+  # parts sharing a belt. P2->P3 is the sharpest case: it retreats S->IF while
+  # bringing FD->S with both parts on zone 2, so whichever part ends the run,
+  # the other only lands correctly if if_to_s == s_to_fd.
+  #
+  # If these are not all equal the fix is physical, not logical: no termination
+  # rule rescues it, and the schedule tables would need sequenced sub-moves.
+  pitch_mm:
+    inq_to_if: null      # OPEN: measure
+    if_to_s: null        # OPEN: measure
+    s_to_fd: null        # OPEN: measure
+    fd_to_out: null      # OPEN: measure
+  provenance_pitch: unmeasured
+
+products:
+  # Dimensions carried over from cell-config.yaml jobs 1 and 2 (read_job(),
+  # script:2120). Only these two run the finishing line; jobs 3/5/6 (45, sc3,
+  # sc4) are other work and are out of scope for this rewrite.
+  cube:
+    legacy_job_id: 1
+    width_mm: 362
+    height_mm: 355
+    depth_mm: 349
+  browser:
+    legacy_job_id: 2
+    width_mm: 362
+    height_mm: 349
+    depth_mm: 235
+
+pairing:
+  # Whether a pair may mix products is an OPEN ITEM (§8) — browsers may or may
+  # not fit the same schedule. Policy is pluggable so this stays open without
+  # blocking: see core/pairing.py.
+  policy: same_product   # same_product | any | browsers_in_dedicated_blocks
+
+watchdog:
+  # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side
+  # timeout must live in firmware, not here — if the orchestrator is the thing
+  # that died, orchestrator-side config cannot save the line. Fans fail ON.
+  orchestrator_heartbeat_hz: 5
+  clearcore_timeout_s: 2.0
+  fans_fail_state: "on"

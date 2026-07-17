@@ -1,0 +1,405 @@
+# =============================================================================
+# UR5 Cube Edge Sanding Cell — extracted tuned constants
+#
+# Sources:
+#   programs/modbustest.script  (Polyscope export; line refs as "script:NNN")
+#   programs/modbustest.txt     (human-readable program listing)
+#   modbustest.ino              (ClearCore firmware; line refs as "ino:NNN")
+#
+# This file is DESCRIPTIVE ONLY — nothing reads it yet. It is a faithful record
+# of the values currently baked into the two programs so they can be reviewed,
+# diffed, and eventually made the single source of truth.
+#
+# Where the two sources disagree or a value looks unintentional, the conflict is
+# recorded under `discrepancies` at the bottom rather than silently resolved.
+# =============================================================================
+
+meta:
+  cell: "2602 UR5 Cube Edge Sand"
+  robot: UR5e (Polyscope, Robotiq Copilot 1.22.1.14215, Aruna Vision 1.2.5.ALPHA)
+  controller: Teknic ClearCore (Modbus TCP server)
+  extracted: 2026-07-16
+
+# -----------------------------------------------------------------------------
+# Network
+# -----------------------------------------------------------------------------
+network:
+  clearcore:
+    modbus_host: 192.168.1.18      # script:20 — address the robot actually talks to
+    static_ip_fallback: 192.168.1.17  # ino:28 — unused while use_dhcp=true (see discrepancies)
+    use_dhcp: true                 # ino:26
+    mac: "DE:AD:BE:EF:FE:EE"       # ino:27
+    raw_tcp_port: 8888             # ino:21 — side channel for "go"/"stop"/job-number strings
+  modbus:
+    slave_id: 255                  # script:20
+    hreg_offset_unused: 512        # ino:23 — declared, never referenced
+    serial_show_delay_ms: 5000     # ino:24 — declared, never referenced
+
+# -----------------------------------------------------------------------------
+# Modbus signal map
+#
+# Naming is inverted between the two sides — read this before touching anything:
+#   robot "*_LOCAL" (addr 100-108) == firmware "*_REMOTE"  (command written by robot)
+#   robot "*_REM"   (addr 200-208) == firmware "*_LOCAL"   (echo-back read by robot)
+# The robot writes a command to 1xx, then spins until the matching 2xx echo
+# equals it. updateLocals() (ino:415) copies 1xx -> 2xx once per firmware loop.
+# That echo IS the handshake — it is how the robot knows the command landed
+# before it starts a move.
+# -----------------------------------------------------------------------------
+signals:
+  # UR modbus_add_signal type codes: 0=digital in, 1=digital out, 2=register in, 3=register out
+  status:  # ClearCore -> robot
+    SERVER_STATE:   { addr: 1, type: 2, hz: 50 }   # 0=not ready, 1=ready, 2=moving
+    JOB:            { addr: 2, type: 2, hz: 50 }
+    RUN:            { addr: 3, type: 0, hz: 50 }
+    WORK_AT_ZERO:   { addr: 4, type: 0, hz: 50 }   # NPN sensor on IO0
+    OFFLOAD:        { addr: 5, type: 0, hz: 50 }   # NPN sensor on IO1
+    ONLOAD:         { addr: 6, type: 0, hz: 50 }   # NPN sensor on IO2
+  command:  # robot -> ClearCore (firmware calls these *_REMOTE)
+    MOTION_MODE_LOC:  { addr: 100, type: 3, hz: 50 }
+    DIRECTION_LOCAL:  { addr: 101, type: 1, hz: 50 }
+    VELOCITY_LOCAL:   { addr: 102, type: 3, hz: 50 }
+    ACC_LOCAL:        { addr: 103, type: 3, hz: 50 }
+    DISTANCE_LOCAL:   { addr: 104, type: 3, hz: 50 }
+    POSITION_LOCAL:   { addr: 105, type: 3, hz: 50 }
+    REQUEST_ID_LOC:   { addr: 106, type: 3, hz: 50 }
+    FEED_CONV_LOCAL:  { addr: 107, type: 1, hz: 50 }
+    BRUSH_ON_LOCAL:   { addr: 108, type: 1, hz: 50 }
+  echo:  # ClearCore -> robot (firmware calls these *_LOCAL)
+    MOTION_MODE_REM:  { addr: 200, type: 2, hz: 50 }
+    DIRECTION_REM:    { addr: 201, type: 0, hz: 10 }
+    VELOCITY_REMOTE:  { addr: 202, type: 2, hz: 10 }
+    ACC_REMOTE:       { addr: 203, type: 2, hz: 10 }
+    DISTANCE_REMOTE:  { addr: 204, type: 2, hz: 10 }
+    POSITION_REMOTE:  { addr: 205, type: 2, hz: 10 }
+    REQUEST_ID_REM:   { addr: 206, type: 2, hz: 10 }
+    FEED_CONV_REM:    { addr: 207, type: 0, hz: 10 }
+    BRUSH_ON_REM:     { addr: 208, type: 0, hz: 10 }
+  # All command signals are runstate-dependent choice 0 (script:68-76):
+  # they are NOT reset when the program stops.
+
+enums:
+  motion_mode:   { distance: 0, position: 1, continuous: 2, idle: 3 }  # ino:346
+  server_state:  { not_ready: 0, ready: 1, moving: 2 }                 # ino:158
+  direction:     { forward: true, reverse: false }                     # ino:372
+
+# -----------------------------------------------------------------------------
+# Conveyor
+# -----------------------------------------------------------------------------
+conveyor:
+  motors:  # ino:43-45
+    main:   { connector: ConnectorM0, role: "main conveyor" }
+    feed:   { connector: ConnectorM1, role: "feed conveyor" }
+    brush:  { connector: ConnectorM2, role: "spray cleanoff brush" }
+
+  # Set_Conveyor_Params(1600, 16000) at script:2115. These are pushed to
+  # VELOCITY_LOCAL/ACC_LOCAL and re-applied to M0 and M1 every firmware loop
+  # (ino:282-285), so they are the live limits, not just startup defaults.
+  velocity_steps_per_sec: 1600
+  acceleration_steps_per_sec2: 16000
+
+  brush_motor:
+    velocity_steps_per_sec: 10000   # ino:330 — hardcoded, ignores VELOCITY_LOCAL
+    acceleration_steps_per_sec2: 100000  # ino:208
+
+  driver:  # ino:192-207
+    input_clocking: CLOCK_RATE_LOW
+    mode: CPM_MODE_STEP_AND_DIR
+    main:  { invert_sd_enable: true, invert_sd_direction: false }
+    feed:  { invert_sd_enable: true, invert_sd_direction: null }  # line commented out (ino:203)
+    brush: { invert_sd_enable: true }
+
+  # mm_to_steps() — script:2106. This is the authoritative conversion.
+  #   360 / 28 / 1.8 / 2 * 8 * (400/381) = 29.9962 microsteps/mm
+  # The 400/381 adjustment is an empirical calibration that lands the result on
+  # ~30 steps/mm; it is not derived from the mechanics.
+  kinematics:
+    pulley_teeth: 28
+    belt_pitch_mm: 2
+    degrees_per_step: 1.8
+    microsteps: 8
+    calibration_adjustment: 1.0498687664041995  # 400/381
+    computed_microsteps_per_mm: 29.9962
+    inches_to_mm: 25.4              # script:2102
+    result_is_floored: true         # script:2113
+
+  request_id:
+    range_max: 65000                # script:2097 — floor(random()*65000)
+    # A new distance move is only recognized when REQUEST_ID changes (ino:305).
+
+# -----------------------------------------------------------------------------
+# Sensors
+#
+# NOTE: there is no debounce anywhere. The firmware raw-digitalReads all three
+# pins once per loop() with no filtering, hysteresis, or sample counting
+# (ino:217-245). The only edge conditioning is on the robot side, which waits
+# for HI then LO to detect a passing part. See discrepancies.
+# -----------------------------------------------------------------------------
+sensors:
+  work_at_zero: { pin: IO0, type: NPN, signal: WORK_AT_ZERO, debounce: none }  # ino:63
+  offload:      { pin: IO1, type: NPN, signal: OFFLOAD,      debounce: none }  # ino:65
+  onload:       { pin: IO2, type: NPN, signal: ONLOAD,       debounce: none }  # ino:67
+  edge_detection_pattern: "wait HI then wait LO"  # script:2373-2380, 3199-3206
+
+# -----------------------------------------------------------------------------
+# Robot
+# -----------------------------------------------------------------------------
+robot:
+  tcp: [0.0010032816279412216, 0.1255407840271643, 0.10415400799666161,
+        -0.7853981633974483, 0.0, 0.0]   # script:84 — RZ = -45 deg
+  payload:
+    mass_kg: 2.71                          # script:77
+    cog_m: [-0.028, -0.028, 0.065]
+    inertia: [0.008109, 0.008109, 0.008109, 0.0, 0.0, 0.0]
+  safety_mode_transition_hardness: 1       # script:78
+  tool_communication:                      # script:79
+    enabled: false
+    baud: 115200
+    parity: 0
+    stop_bits: 1
+    rx_idle_chars: 1.5
+    tx_idle_chars: 3.5
+  tool_voltage: 0                          # script:83
+
+  digital_outputs:
+    sanding_tool: 3    # "Start tool" / "Stop tool" — script:2456 / 2494
+    sprayer: 5         # "SprayerOn" — script:2912 / 2941
+
+  waypoints:
+    # p = TCP pose [x,y,z,rx,ry,rz] in m/rad; q = joint solution used as qnear.
+    # Every movej below is get_inverse_kin(p, qnear=q) — q is the seed, p wins.
+    Sand_Base:    # script:1946
+      p: [-0.331001786132, 0.208012835371, 0.654466193756,
+           0.031455331898, -0.031501988683, -1.570502534180]
+      q: [-1.0715606848346155, -1.4174283158830185, 1.9634087721454065,
+           1.5022095876881103, -0.8771541754352015, -2.2455742994891565]
+    Spray_Base:   # script:1958
+      p: [-0.340005343453, 0.215234102213, 0.580009073078,
+           0.000090069881, -0.000058797884, 0.003166166082]
+      q: [-0.9149273077594202, -1.370975525384285, 2.0841339270221155,
+           1.403167648906372, -0.9817641417132776, 0.7475907802581787]
+    Waypoint_1:   # script:1960 — cube horizontal spray start
+      p: [-0.428600152435, 0.232290934362, 0.586039773295,
+           0.000231322158, 0.785448884003, -0.000082390140]
+      q: [-0.5460622946368616, -1.3442074072412034, 1.8037555853473108,
+          -2.0309964619078578, 1.5779430866241455, -2.600095335637228]
+    Waypoint_2:   # script:1962
+      p: [-0.357368952820, 0.126847098618, 0.585918586282,
+          -0.613862949287, 0.613941831848, 1.482246264988]
+      q: [-0.5370748678790491, -2.077672143975729, 2.4196086565600794,
+          -1.9133287868895472, 1.5780717134475708, -1.0378239790545862]
+    Waypoint_3:   # script:1964
+      p: [-0.653364830109, 0.279995618872, 0.585940147935,
+           0.614101418810, 0.613761156440, -1.482233908617]
+      q: [-0.6607950369464319, -0.7382159394076844, 0.8552025000201624,
+          -1.6881376705565394, 1.5791687965393066, 2.2300729751586914]
+    Clean_Brush:  # script:1966
+      p: [-0.429198884978, 0.501374366334, 0.410614152052,
+          -1.465331514151, -0.472255095116, 0.651512581124]
+      q: [-1.1694462935077112, -1.0916088980487366, 1.8296492735492151,
+           1.5450545984455566, -1.4361899534808558, -5.9739650825606745]
+
+  unused_globals:  # present in the export, referenced nowhere in this program
+    Point_1: [-0.315, 0.21, 0.58, 3.992943204181854e-5,
+              -4.742033048035595e-6, -1.5843023166044192]   # script:88
+    edges_origin: [0.4999924637660199, -0.09998014276369725, 0.1000010878003166,
+                   1.208444283053843, 1.2095543254410948, 1.2086858218570178]  # script:89
+
+# -----------------------------------------------------------------------------
+# Motion profiles
+# -----------------------------------------------------------------------------
+motion:
+  movej_default:   { a: 1.3962634015954636, v: 1.0471975511965976 }  # 80 deg/s^2, 60 deg/s
+  movel_process:   { a: 0.5, v: 0.05 }   # all sanding / height passes / probes
+  movel_spray_approach: { a: 1.2, v: 0.25 }  # script:2870, 2895 — vertical spray only
+  movel_retract:   { a: 3.0, v: 0.1 }    # post-contact backtrack
+  movel_retract_brush: { a: 0.5, v: 0.1 }  # script:3153 — gentler, brush station
+
+  stopl:
+    on_tool_contact: 3.0     # script:2427
+    on_force_mode_end: 5.0   # script:2497
+    brush_contact: 0.5       # script:3143
+
+  tool_contact:
+    search_direction: [0, 0, 1]     # base Z+
+    search_distance_m: 1000.0       # script:2415 — effectively unbounded; contact stops it
+    additional_retraction_m: 0.0    # script:2434 — retract exactly to contact pose
+
+# -----------------------------------------------------------------------------
+# Force control
+#
+# All force_mode calls share the same frame/selection/limits; only the Z force
+# magnitude is tuned per operation. type=2 (frame stays fixed relative to base).
+# -----------------------------------------------------------------------------
+force:
+  task_frame: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
+  selection_vector: [0, 0, 1, 0, 0, 0]     # Z compliant only
+  type: 2
+  limits: [0.1, 0.1, 0.15, 0.3490658503988659, 0.3490658503988659, 0.3490658503988659]
+  # translational limits m/s, rotational 20 deg
+  z_force_newtons:
+    main_sand: 6.0        # script:2463, 2503 — both dried and undried branches
+    sand_45: 7.0          # script:2594, 2674
+    sand_sc3_sc4: 10.0    # script:2798
+  ft_sensor:
+    wait_steady_ms: 2000  # script:2448 — rq_wait_ft_sensor_steady
+    settle_after_zero_s: 0.1   # script:2450
+    settle_before_force_s: 0.02  # script:2461
+
+# -----------------------------------------------------------------------------
+# Job table — read_job(), script:2120
+# Dimensions in mm. `depth` is read but never used by this program.
+# -----------------------------------------------------------------------------
+jobs:
+  1: { name: cube,        width: 362,  height: 355, depth: 349 }
+  2: { name: browser,     width: 362,  height: 349, depth: 235 }
+  3: { name: "45",        width: 724,  height: 235, depth: 349 }
+  4: { name: stereocab_2, width: 724,  height: 235, depth: 349 }
+  5: { name: sc_3,        width: 1086, height: 235, depth: 349 }
+  6: { name: sc_4,        width: 1448, height: 235, depth: 349 }
+  7: { name: unnamed,     width: 310,  height: 325, depth: 125 }  # see discrepancies
+  defaults:  # script:85-87, before read_job() first runs
+    width: 362
+    height: 355
+    loaded: 0
+  poll_interval_s: 0.2   # script:2153 — sleep at end of read_job()
+
+# -----------------------------------------------------------------------------
+# Move distances
+#
+# `width_inset_mm: 12` is the dominant tuned number: nearly every conveyor pass
+# is (width - 12) so the tool does not run off the end of the part.
+# Height moves are pose_add(p[+/-height/1000, 0,0,0,0,0]) — height mm -> m, on
+# the TCP X axis (which the -45 deg TCP rotation maps onto the part face).
+# -----------------------------------------------------------------------------
+moves:
+  width_inset_mm: 12
+
+  sand_main:            # script:2464-2489
+    pass_1: "width - 12"
+    pass_2: "-width + 12"
+  sand_45:              # script:2545-2680, JOB 3
+    step: "(width - 12) / 3"
+    return: "-(width - 12) * 2/3"
+    retract_z_m: 0.02
+  sand_sc3_sc4:         # script:2735-2830, JOB 5 or 6
+    conveyor_out: "(width - 12) / 2"
+    conveyor_back: "-(width - 12) / 2"
+    approach_x_m: 0.085
+    pass_x_m: 0.08
+    retract_z_m: 0.05
+  spray_vertical:       # script:2858-2944
+    pass_1: "width - 12"
+    pass_2: "-width + 12"
+    approach_z_m_job2: 0.1    # script:2869
+    approach_z_m_job7: 0.2    # script:2894
+  spray_45:             # script:2949-2989, JOB 3
+    step: "width / 3"         # NOT (width-12)/3 — see discrepancies
+  spray_sc3_sc4:        # script:2995-3050, JOB 5 or 6
+    conveyor_out: "(width - 12) / 2"
+    conveyor_back: "-(width - 12) / 2"
+    approach_x_m: 0.012
+    pass_x_m: 0.21
+  spray_cube_horizontal:  # script:3063-3111, JOB 1
+    pass_1: "width - 12"
+    pass_2: "-width + 12"
+  dry:                  # script:3169-3183
+    initial_advance: "width + 500"   # 500mm clearance past the part
+    oscillate_back: "-(width / 2)"
+    oscillate_forward: "width / 2"
+
+# -----------------------------------------------------------------------------
+# Timings
+# -----------------------------------------------------------------------------
+timings:
+  dry_duration_s: 165        # script:3177 — oscillation loop runs until timer_dry >= 165
+  brush_duration_s: 30       # script:2250 — Thread_2 kills brush after timer_brush > 30
+  brush_settle_before_on_s: 1.0   # script:3160 — after contact, before BRUSH_ON
+  brush_settle_after_off_s: 1.0   # script:2233
+  unload_settle_s: 1.0       # script:3233 — after OFFLOAD falling edge
+  job_poll_s: 0.2            # script:2153
+  aruna_init_sleep_s: 0.2    # script:96
+  # sleep(1.0E-10) appears throughout — Polyscope codegen artifact, not a real delay.
+
+# -----------------------------------------------------------------------------
+# Sequence state
+# -----------------------------------------------------------------------------
+state:
+  loaded: { initial: 0, set_on_load: 1, cleared_on_unload: 0 }   # script:2156
+  dried2: { initial: false }   # script:2158 — false = sand+spray+dry pass, true = second pass then unload
+  brush_on_local: { initial: false }  # script:2160
+
+# =============================================================================
+# Discrepancies and dead values found during extraction
+# =============================================================================
+discrepancies:
+  - id: steps-per-inch-conflict
+    severity: high
+    summary: >
+      The firmware's inchesToSteps() (ino:427) computes 37.23 steps/inch
+      (1.466 steps/mm) from a 1.710" roller diameter and 200 steps/rev. The
+      robot's mm_to_steps() (script:2106) computes 29.996 steps/mm from a
+      28-tooth 2mm-pitch belt at 8 microsteps. These describe different
+      mechanisms and differ by ~20x. inchesToSteps() is never called by the
+      firmware, so the belt figure is what actually runs — but the dead function
+      is a live trap for anyone who reads the firmware first.
+
+  - id: static-ip-mismatch
+    severity: medium
+    summary: >
+      Firmware static fallback is 192.168.1.17 (ino:28) but the robot addresses
+      the ClearCore at 192.168.1.18 (script:20). Harmless today because
+      usingDhcp=true (ino:26) means the static address is never applied, and DHCP
+      evidently hands out .18. If DHCP is ever turned off, or the lease changes,
+      every modbus signal silently stops resolving.
+
+  - id: spray-45-missing-inset
+    severity: medium
+    summary: >
+      45 Spray steps by width/3 (script:2960-2977) while 45 Sand steps by
+      (width-12)/3 (script:2546). Every other operation applies the 12mm inset.
+      Either the spray pass intentionally covers the full width, or the inset was
+      forgotten here — worth confirming against the part before consolidating.
+
+  - id: no-sensor-debounce
+    severity: medium
+    summary: >
+      All three NPN sensors are raw digitalRead per loop with no debounce
+      (ino:217-245). The robot's "wait HI then wait LO" pattern tolerates this
+      for slow-moving parts, but a single noisy sample during the ONLOAD or
+      OFFLOAD wait will advance the sequence early. There is no tuned debounce
+      value to extract because none exists.
+
+  - id: unreachable-continuous-branch
+    severity: low
+    summary: >
+      ino:312 repeats the "continuous" motion-mode branch already handled at
+      ino:293. The second branch is unreachable dead code.
+
+  - id: job-7-undocumented
+    severity: low
+    summary: >
+      read_job() handles JOB 7 (310x325x125) and the program has a dedicated
+      JOB==7 feed loop (script:2315) and spray approach height (script:2894), but
+      the job-number comment (script:2122) only documents jobs 1-6. Job 7 is
+      unnamed here pending confirmation of what part it is.
+
+  - id: position-move-arg-ignored
+    severity: low
+    summary: >
+      Position_Move(position) (script:2011) compares its argument against
+      MOTION_MODE_LOC and then always writes mode 1, never writing the position
+      itself to POSITION_LOCAL. The function is not called by this program.
+
+  - id: printstate-copy-paste
+    severity: low
+    summary: >
+      printState() (ino:385) prints oldRequestId under the "Run:" label and then
+      prints "Old RequestId:" twice. Diagnostic only; never called.
+
+  - id: dead-firmware-constants
+    severity: info
+    summary: >
+      REG (512), showDelay (5000), counter, loopLength (5), stateString /
+      currentStateString / getStateString() are declared and never used
+      (ino:23-24, 38-39, 60-61, 380).

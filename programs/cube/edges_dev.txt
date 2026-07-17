@@ -1,0 +1,19 @@
+ Program
+   Robot Program
+     MoveJ
+       edges_origin
+     MoveJ
+       Waypoint_1
+     MoveL
+       Direction: Base Z+
+         Until (distance)
+       Direction: Tool Z-
+         Until (distance)
+       MoveJ
+         Waypoint_2
+       Direction: Base Y-
+         Until (distance)
+       Direction: Base Z-
+         Until (distance)
+       Direction: Base Y+
+         Until (distance)

@@ -1,0 +1,54 @@
+ Program
+   Robot Program
+     MoveL
+       Start
+       Hov_Sand
+       Zero FT Sensor
+       Start tool
+       Force
+         4-Point Path
+           Point 1
+           Point 2
+           Point 3
+           Point 4
+       'Force Control'
+       Stop tool
+       Hov_Sand
+     MoveJ
+       Waypoint_1
+       Waypoint_2
+       Waypoint_3
+     MoveL
+       Waypoint_4
+     Start tool
+     Force
+       Multipoint Path
+         MoveJ to waypoint         
+         Line to waypoint 2         
+     'Force Control'
+     Stop tool
+     MoveJ
+       Waypoint_5
+       Waypoint_6
+       Waypoint_10
+       Start tool
+     'Force Control'
+     Force
+       Multipoint Path
+         MoveJ to waypoint         
+         Line to waypoint 2         
+     Stop tool
+     MoveJ
+       Waypoint_11
+       Waypoint_7
+       Waypoint_8
+       Start tool
+     'Force Control'
+     Force
+       Multipoint Path
+         MoveJ to waypoint         
+         Line to waypoint 2         
+     Stop tool
+     MoveJ
+       Waypoint_9
+       Start

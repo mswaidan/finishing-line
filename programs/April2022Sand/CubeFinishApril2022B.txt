@@ -1,0 +1,38 @@
+ Program
+   Robot Program
+     Wait: 0.01
+   sandFront
+     sandFront
+       MoveJ
+         Clear_1
+       MoveL
+         Waypoint_2
+         Zero FT Sensor
+         Find Surface
+           'Add Stop conditions from the Find Surface node'
+         Start tool
+         Wait: 0.5
+       MoveL
+         Force
+           Waypoint_3
+           Waypoint_4
+           Waypoint_5
+           Waypoint_6
+           Stop tool
+         Direction: Tool Z-
+           Until (distance)
+       MoveJ
+         Clear_2
+         'Waypoint_35'
+   Event GoBtn
+     Call sandFront
+   Event PinsBtn≟ True 
+     If PinsBtn≟ True 
+       If PinsOut≟ True 
+         Set PinsOut=Off
+       Else
+         Set PinsOut=On
+   StartRotate
+     Set RotateGo=4.0
+     Wait: 0.1
+     Set RotateGo=0.0

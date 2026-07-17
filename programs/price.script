@@ -1,0 +1,14 @@
+def price (quantity,type,water,lemonade,soda,beer):
+if(type==1):
+total=quantity*water
+elif(type==2):
+total=quantity*lemonade
+elif(type==3):
+total=quantity*soda
+elif(type==4):
+total=quantity*beer
+else:
+popup("Invalid selection","Error",warning=False,error=False)
+end
+return total
+end

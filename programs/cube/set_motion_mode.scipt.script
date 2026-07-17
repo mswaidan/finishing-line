@@ -1,0 +1,11 @@
+def Set_Motion_Mode(modeString):
+  if modeString == "direction":
+    modbus_set_output_register("MOTION_MODE", 0, False)
+  elif modeString == "position":
+    modbus_set_output_register("MOTION_MODE", 1, False)
+  elif modeString == "continuous":
+    modbus_set_output_register("MOTION_MODE", 2, False)
+  else:
+    modbus_set_output_register("MOTION_MODE", 0, False)
+  end
+end

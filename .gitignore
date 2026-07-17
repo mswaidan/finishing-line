@@ -1,0 +1,9 @@
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.egg-info/
+.pytest_cache/
+
+# Claude Code local settings (per-machine permission grants)
+.claude/settings.local.json

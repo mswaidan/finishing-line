@@ -1,0 +1,10 @@
+ Program
+   Robot Program
+     MoveJ
+       Clear
+       CubeOrigin
+       Clear
+     MoveJ
+       Clear
+       CubeOrigin
+       Clear

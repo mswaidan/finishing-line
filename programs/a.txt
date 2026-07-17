@@ -1,0 +1,35 @@
+ Program
+   Robot Program
+     MoveJ
+       Start
+       Pick_approach
+     MoveL
+       above_pallet
+       pick
+       Gripper Close (1)
+       above_pallet
+       Pick_approach
+       MoveJ
+         place_approach
+       MoveL
+         place
+         Gripper Open (1)
+         Wait left_sensor=HI
+         Set conveyor_on=On
+         place_approach
+         MoveJ
+           Start
+           done_pt_appro
+         Wait right_sensor=HI
+         Set conveyor_on=Off
+       MoveL
+         done_pick
+         Gripper Close (1)
+         done_pt_appro
+         Pick_approach
+         above_pallet
+         pick
+         Gripper Open (1)
+         above_pallet
+         Pick_approach
+         Start

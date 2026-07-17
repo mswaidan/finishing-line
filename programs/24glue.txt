@@ -1,0 +1,46 @@
+ Program
+   Robot Program
+     Loop 3 times
+       MoveJ
+         Waypoint_12
+       var_1≔'enter part #'
+       Switch var_1
+         Case 1
+           MoveJ
+             Waypoint_1
+             MoveP
+               Waypoint_2
+               CircleMove
+                 ViaPoint_1
+                 EndPoint_1
+         Case 2
+           MoveJ
+             Waypoint_3
+             MoveP
+               CircleMove
+                 ViaPoint_2
+                 EndPoint_2
+               CircleMove
+                 ViaPoint_3
+                 EndPoint_3
+               CircleMove
+                 ViaPoint_4
+                 EndPoint_4
+               CircleMove
+                 ViaPoint_5
+                 EndPoint_5
+         Case 3
+           MoveJ
+             Waypoint_4
+             Waypoint_5
+             Waypoint_6
+             Waypoint_7
+             Waypoint_8
+             Waypoint_9
+             Waypoint_10
+         Default Case
+           Popup: you jackass.  thats not a valid part number.  try again
+     Set Payload: Payload
+     MoveJ
+       Waypoint_11
+       Popup: clean me

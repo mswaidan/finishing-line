@@ -1,0 +1,34 @@
+ Program
+   Init Variables
+   Robot Program
+     MoveL
+       Waypoint_1
+       Gripper Close (1)
+       Waypoint_2
+         Until (tool_contact_detection)
+           Gripper Open (1)
+           Direction: Base Z-
+             Until (distance)
+               Gripper Close (1)
+               Waypoint_3
+               Waypoint_4
+               If con_fll≟ True 
+                 Popup: Con fill
+                 con_fll≔ False 
+               Waypoint_5
+               Force
+                 Wait: 0.5
+               Gripper Open (1)
+               Waypoint_6
+               conv≔ True 
+         Until (reached_waypoint)
+   Thread_1
+     If conv≟ True 
+       Set conveyor=On
+       Wait: 0.75
+       Set conveyor=Off
+       conv≔ False 
+     If right≟ True 
+       con_fll≔ True 
+     var_1≔force()
+     sync()

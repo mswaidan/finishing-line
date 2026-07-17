@@ -1,0 +1,12 @@
+# Normalize line endings; shell scripts must stay LF (they get piped into WSL).
+* text=auto
+*.sh text eol=lf
+
+# Polyscope artifacts: .urp is gzipped XML, .installation is serialized binary.
+# (.oldN/.bakN backups are a text/binary mix — text=auto content-detection
+# handles those correctly on its own.)
+*.urp binary
+*.installation binary
+
+# Salvaged ClearCore stick image
+*.io binary

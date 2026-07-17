@@ -1,0 +1,36 @@
+ Program
+   Robot Program
+     MoveL
+       Waypoint_1
+       Waypoint_2
+       Waypoint_3
+       'Find Surface'
+       'Point_2≔Tool_constget_actual_tcp_pose()'
+       Start tool
+       Force Control
+         Wait for force
+           'Wait until force and torque are reached.'
+         Multipoint Path
+           MoveJ to waypoint         
+           Line to waypoint 3         
+           Line to waypoint 4         
+           Line to waypoint 5         
+           Line to waypoint 6         
+           Line to waypoint 1         
+       MoveL
+         Waypoint_4
+         Waypoint_5
+         Waypoint_6
+         Waypoint_7
+       Force Control
+         Wait for force
+           'Wait until force and torque are reached.'
+         Multipoint Path
+           MoveJ to waypoint         
+           Line to waypoint 3         
+           Line to waypoint 4         
+           Line to waypoint 5         
+           Line to waypoint 6         
+           Line to waypoint 1         
+       Stop tool
+       Waypoint_1

@@ -1,0 +1,125 @@
+ Program
+   Init Variables
+   Robot Program
+     count≔count+1
+     Loop
+       Wait DI[0]=HI
+       Set DO[1]=On
+       MoveJ
+         End
+       MoveJ
+         Ready
+       Call sandTop
+       Call positionFace1
+       Call sandFace
+       MoveJ
+         Waypoint_3
+       Call sandFace
+       MoveJ
+         Waypoint_4
+         Waypoint_5
+       Call sandFace_1
+       Stop tool
+       MoveJ
+         Waypoint_7
+       MoveJ
+         BackClear
+       Call sandBack
+       MoveJ
+         End
+       Set DO[1]=Off
+     If count≟20
+       Popup: change sand paper
+       count≔count+1
+   Event digital_in[1]≠ True 
+     Set DO[0]=Off
+     Set DO[1]=Off
+     Halt
+   positionFace1
+     MoveJ
+       clear1
+       Waypoint_2
+   sandFace
+     MoveL
+       Direction: Base Z-
+         Until (distance)
+     MoveL
+       Direction: Tool Z+
+         Until (tool_contact_detection)
+       Start tool
+       Wait: 2.0
+       Force Control
+         Wait for force
+           'Wait until force and torque are reached.'
+       Direction: Tool X+
+         Until (distance)
+       'Find Surface'
+       'Force'
+       Stop tool
+       Direction: Base Z+
+         Until (distance)
+   sandFace_1
+     MoveL
+       Direction: Base Z-
+         Until (distance)
+     MoveL
+       Direction: Tool Z+
+         Until (tool_contact_detection)
+       Start tool
+       Wait: 2.0
+       Force Control
+         Wait for force
+           'Wait until force and torque are reached.'
+       Direction: Base Y+
+         Until (distance)
+       'Find Surface'
+       'Force'
+       Stop tool
+       Direction: Base Z+
+         Until (distance)
+   sandTop
+     MoveL
+       Direction: Tool Z+
+         Until (tool_contact_detection)
+     Start tool
+     Wait: 2.0
+     Find Surface
+       'Add Stop conditions from the Find Surface node'
+     Force
+       MoveL
+         Direction: Base Y+
+           Until (distance)
+         Direction: Base X+
+           Until (distance)
+         Direction: Base Y-
+           Until (distance)
+         Direction: Base X-
+           Until (distance)
+     MoveL
+       Direction: Base Z+
+         Until (distance)
+     Stop tool
+   sandBack
+     MoveL
+       Direction: Tool Z+
+         Until (tool_contact_detection)
+     Start tool
+     Wait: 1.0
+     'Find Surface'
+     'Force'
+     Force Control
+       Wait for force
+         'Wait until force and torque are reached.'
+     MoveL
+       Direction: Base Y+
+         Until (distance)
+       Direction: Base X+
+         Until (distance)
+       Direction: Base Y-
+         Until (distance)
+       Direction: Base X-
+         Until (distance)
+     MoveL
+       Direction: Base Z+
+         Until (distance)
+     Stop tool

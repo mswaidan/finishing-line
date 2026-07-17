@@ -1,0 +1,12 @@
+ Program
+   BeforeStart
+     Script: price.script
+     lemonade≔1.5
+     soda≔2.5
+     beer≔3.5
+     water≔0.5
+   Robot Program
+     drink≔'What would you like to drink?  Water (1), Lemonade (2), Soda (3), Beer (4)'
+     quantity≔'How many drinks would you like?'
+     Total≔price(quantity,drink,water,lemonade,soda,beer)
+     Popup

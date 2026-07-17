@@ -1,0 +1,135 @@
+ Program
+   Robot Program
+     MoveJ
+       clear
+       Zero FT Sensor
+     sandFront
+       MoveJ
+         clear
+       MoveL
+         Waypoint_1
+         Start tool
+         Zero FT Sensor
+         Wait: 2.0
+         Find Surface
+           'Add Stop conditions from the Find Surface node'
+       MoveL
+         Force
+           Direction: CubeFront Y+
+             Until (distance)
+           Direction: CubeFront X+
+             Until (distance)
+           Direction: CubeFront Y-
+             Until (distance)
+           Direction: CubeFront X-
+             Until (distance)
+           Stop tool
+         Direction: Tool Z-
+           Until (distance)
+       MoveJ
+         clear
+     sandRebate
+       MoveJ
+         clear
+         Zero FT Sensor
+         MoveL
+           ready_left
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_44
+           Stop tool
+           Waypoint_4
+           clear
+           Waypoint_2
+           Waypoint_3
+           Zero FT Sensor
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_8
+             Waypoint_5
+           Stop tool
+           Waypoint_17
+           MoveJ
+             Waypoint_11
+             Waypoint_6
+             Waypoint_31
+             Zero FT Sensor
+           Find Surface
+             'Add Stop conditions from the Find Surface node'
+           Start tool
+           Wait: 0.5
+           Force
+             Waypoint_7
+           Stop tool
+           Waypoint_13
+           Waypoint_9
+           clear
+     'Chamfer'
+     SprayFront
+       MoveJ
+         clear
+       MoveJ
+         Waypoint_10
+         Call StartSpray
+       MoveL
+         Waypoint_12
+         Call stopSpray
+       MoveJ
+         Waypoint_21
+         Call StartSpray
+       MoveL
+         Waypoint_22
+         Call stopSpray
+       MoveJ
+         Waypoint_23
+         Call StartSpray
+       MoveL
+         Waypoint_24
+         Call stopSpray
+       MoveJ
+         clear
+       MoveJ
+         Waypoint_26
+         Call StartSpray
+       MoveL
+         Waypoint_25
+         Call stopSpray
+       MoveJ
+         clear
+     SprayRebate
+       MoveJ
+         clear
+       MoveJ
+         Waypoint_28
+         Call StartSpray
+       MoveL
+         Waypoint_27
+         Call stopSpray
+       MoveJ
+         Waypoint_29
+         Call StartSpray
+       MoveL
+         Waypoint_30
+         Call stopSpray
+       MoveJ
+         clear
+       MoveJ
+         Waypoint_32
+         Call StartSpray
+       MoveL
+         Waypoint_33
+         Call stopSpray
+       MoveJ
+         clear
+   StartSpray
+     Set DO[1]=On
+     Wait: 0.3
+   stopSpray
+     Set DO[1]=Off
+     Wait: 0.3

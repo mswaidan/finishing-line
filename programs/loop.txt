@@ -1,0 +1,52 @@
+ Program
+   Robot Program
+     Loop 5 times
+       MoveJ
+         Waypoint_4
+       var_1≔'Change'
+       Switch var_1
+         Case 1
+           MoveJ
+             Waypoint_2
+             Waypoint_3
+           MoveP
+             Waypoint_1
+             CircleMove
+               ViaPoint_4
+               EndPoint_4
+             CircleMove
+               ViaPoint_3
+               EndPoint_3
+             CircleMove
+               ViaPoint_2
+               EndPoint_2
+             CircleMove
+               ViaPoint_1
+               EndPoint_1
+         Case 2
+           MoveL
+             Waypoint_5
+             Waypoint_6
+           MoveP
+             Waypoint_7
+             CircleMove
+               ViaPoint_5
+               EndPoint_5
+           MoveJ
+             Waypoint_9
+         Case 3
+           MoveL
+             Waypoint_8
+             Waypoint_10
+             Waypoint_11
+             Waypoint_12
+             Waypoint_13
+             Waypoint_14
+             Waypoint_15
+             Waypoint_16
+         Default Case
+           Popup: Blank Space
+     Clean
+       MoveJ
+         Waypoint_17
+         Wait: 10.0

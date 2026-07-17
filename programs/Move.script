@@ -1,0 +1,45 @@
+def Move():
+  step_count_6c6f9899_b1f7_4ccb_b2ea_a39cfb0eb007 = 0.0
+  thread Step_Counter_Thread_e5592168_477c_418e_9650_e223abed207a():
+    while (True):
+      step_count_6c6f9899_b1f7_4ccb_b2ea_a39cfb0eb007 = step_count_6c6f9899_b1f7_4ccb_b2ea_a39cfb0eb007 + 1.0
+      sync()
+    end
+  end
+  run Step_Counter_Thread_e5592168_477c_418e_9650_e223abed207a()
+  set_tool_communication(False, 115200, 0, 1, 1.5, 3.5)
+  set_tool_output_mode(0)
+  set_tool_digital_output_mode(0, 1)
+  set_tool_digital_output_mode(1, 1)
+  set_tool_voltage(0)
+  set_target_payload(1.290000, [0.000000, -0.007000, 0.042000], [0.002353, 0.002353, 0.002353, 0.000000, 0.000000, 0.000000])
+  set_tcp(p[0.0,0.0,0.0,0.0,0.0,0.0])
+  set_safety_mode_transition_hardness(1)
+  set_standard_analog_input_domain(0, 0)
+  set_standard_analog_input_domain(1, 0)
+  set_tool_analog_input_domain(0, 1)
+  set_tool_analog_input_domain(1, 1)
+  set_analog_outputdomain(0, 1)
+  set_analog_outputdomain(1, 1)
+  set_input_actions_to_default()
+  set_gravity([0.0, 0.0, 9.82])
+  global Plane_1=p[-0.047184868714714674,-0.4971485121535744,0.09044178545745049,-1.694546946410818E-5,-1.6837140921846148E-4,-1.570791073009175]
+  global Point_1=p[0.18339560525173507,-0.38958403727673924,0.7281785260165131,1.56896230617899,-0.08736698574563659,0.08740154261189233]
+  global Point_2=p[0.0,0.0,0.0,0.0,0.0,0.0]
+  # begin: URCap Installation Node
+  #   Source: Robotiq_Copilot, 1.22.1.14215, Robotiq Inc.
+  #   Type: Copilot
+  # end: URCap Installation Node
+  $ 1 "Robot Program"
+  $ 2 "Script: Move.script"
+  def Move() :
+  
+  set_payload(1.29)
+  set_tcp(p[0,0,0,0,0,0])
+  movep(p[0.211331,0,0.98005,2.221441,2.221441,0], a=10, v=0.25, r=0.001)
+  
+  end
+  
+  
+  Move()
+end

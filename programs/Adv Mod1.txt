@@ -1,0 +1,86 @@
+ Program
+   Init Variables
+   BeforeStart
+     MoveJ
+       Waypoint_1
+       Home
+     Gripper Reset and Activate
+   Robot Program
+     cycle_time: Reset
+     cycle_time: Start
+     Gripper Move37mm (1)
+     Pick New Part
+       Pallet_1
+         Patterns
+           Grid_Pattern_1
+             CornerItem_1
+             CornerItem_2
+             CornerItem_3
+             CornerItem_4
+         Layers
+         At Each Item
+           Generated Movements
+             MoveJ
+               Approach
+             MoveL
+               ToolActionPoint
+             Tool action
+               Gripper Close (1)
+             MoveL
+               Exit_1
+     Place on Conveyor
+       MoveL
+         Conv_Drop_Entry
+       MoveJ
+         Conveyor_Drop
+         Gripper Move37mm (1)
+         Conv_Drop_Entry
+     Convey Part
+       Wait Left_Sensor=HI
+       Set Run_Conveyor=On
+       MoveJ
+         Conv_Pick_Entry
+         Conv_Pick
+       Wait Right_Sensor=HI
+       Wait: 0.2
+       Set Run_Conveyor=Off
+       Gripper Close (1)
+       MoveJ
+         Conv_Pick_Entry
+     Inspect Part
+       MoveJ
+         Inspection_Pos
+         Inspect_Status≔'Is the part good?'
+       If Inspect_Status≟ False 
+         Call Scrap_Part
+       Else
+         Call Ok_Part_Pallet
+     If Pallet_1_cnt≟1
+       Home
+       Halt
+   Ok_Part_Pallet
+     Pallet_2
+       Patterns
+         Grid_Pattern_2
+           CornerItem_5
+           CornerItem_6
+           CornerItem_7
+           CornerItem_8
+       Layers
+       At Each Item
+         Generated Movements
+           MoveJ
+             Approach
+           MoveL
+             ToolActionPoint
+           Tool action
+             Gripper Move37mm (1)
+           MoveL
+             Exit_1
+   Scrap_Part
+     MoveJ
+       Scrap_Entry
+       Scrap_Pos
+     Gripper Move37mm (1)
+     MoveJ
+       Scrap_Entry

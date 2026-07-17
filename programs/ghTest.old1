@@ -1,0 +1,64 @@
+<URProgram name="ghTest" installation="cube_dev" installationRelativePath="cube_dev" directory="/programs" createdIn="5.11.11.0" lastSavedIn="5.11.5.1010327" robotSerialNumber="20215500677" crcValue="2551974330">
+  <kinematics status="LINEARIZED" validChecksum="true">
+    <deltaTheta value="5.3749250758516887E-8, -0.9730912703997817, 7.204744832640642, 0.05153027957165353, -1.4395627006491385E-7, -8.700797825278439E-8"/>
+    <a value="2.0377638566211403E-4, -0.2392221308833737, -0.3918452496101486, -6.237179898654498E-7, 2.2109051649691473E-5, 0.0"/>
+    <d value="0.1627223005758297, -355.8085589794784, 353.3720604728576, 2.5703847646048774, 0.09974148110842518, 0.09962902295779037"/>
+    <alpha value="1.571124027880282, 9.875997938367958E-4, 0.008295367802093468, 1.568962911569848, -1.5703026462970684, 0.0"/>
+    <jointChecksum value="-1302823052, -1303952216, 862443943, -1597004700, -1594940224, -1597023177"/>
+  </kinematics>
+  <children>
+    <MainProgram runOnlyOnce="true" InitVariablesNode="false">
+      <children>
+        <Script type="File">
+          <cachedContents>def Program():
+  DefaultToolTcp = p[0, 0, 0, 0, 0, 1.5708]
+  DefaultToolWeight = 0
+  DefaultToolCog = [0, 0, 0]
+  DefaultSpeed = 0.1
+  DefaultZone = 0
+    set_tool_communication(False, 115200, 0, 1, 1.5, 3.5)
+  set_tool_output_mode(0)
+  set_tool_digital_output_mode(0, 1)
+  set_tool_digital_output_mode(1, 1)
+  set_tool_voltage(0)
+  set_gravity([1.4727641065739442E-31, 1.2026031567627009E-15, -9.82])
+  set_target_payload(2.710000, [-0.028000, -0.028000, 0.065000], [0.008109, 0.008109, 0.008109, 0.000000, 0.000000, 0.000000])
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 1, 2, &quot;SERVER_STATE&quot;, False)
+  modbus_set_signal_update_frequency(&quot;SERVER_STATE&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 101, 1, &quot;DIRECTION&quot;, False)
+  modbus_set_signal_update_frequency(&quot;DIRECTION&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 102, 3, &quot;VELOCITY&quot;, False)
+  modbus_set_signal_update_frequency(&quot;VELOCITY&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 103, 3, &quot;ACCELERATION&quot;, False)
+  modbus_set_signal_update_frequency(&quot;ACCELERATION&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 104, 3, &quot;DISTANCE&quot;, False)
+  modbus_set_signal_update_frequency(&quot;DISTANCE&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 105, 3, &quot;POSITION&quot;, False)
+  modbus_set_signal_update_frequency(&quot;POSITION&quot;, 1)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 100, 3, &quot;MOTION_MODE&quot;, False)
+  modbus_set_signal_update_frequency(&quot;MOTION_MODE&quot;, 250)
+  modbus_add_signal(&quot;192.168.1.17&quot;, 255, 106, 3, &quot;REQUEST_ID&quot;, False)
+  modbus_set_signal_update_frequency(&quot;REQUEST_ID&quot;, 250)
+  modbus_set_runstate_dependent_choice(&quot;DIRECTION&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;VELOCITY&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;ACCELERATION&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;DISTANCE&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;POSITION&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;MOTION_MODE&quot;,0)
+  modbus_set_runstate_dependent_choice(&quot;REQUEST_ID&quot;,0)
+  set_tcp(DefaultToolTcp)
+  set_payload(DefaultToolWeight, DefaultToolCog)
+  movej([2.334, -1.5755, 2.2847, -2.28, -1.5708, 0.7632], a=3.1416, v=0.3142, r=DefaultZone)
+  movel(p[0.71929, -0.19401, 0.23225, 2.22144, 2.22144, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.71929, 0.16794, 0.23225, 2.22144, 2.22144, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.37004, 0.16794, 0.23225, 2.22144, 2.22144, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+  movel(p[0.37004, -0.19401, 0.23225, 2.22144, 2.22144, 0], a=1, v=DefaultSpeed, r=DefaultZone)
+end
+Program()
+</cachedContents>
+          <file>ghTest.script</file>
+        </Script>
+      </children>
+    </MainProgram>
+  </children>
+</URProgram>

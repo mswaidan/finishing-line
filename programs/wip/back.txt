@@ -1,0 +1,63 @@
+ Program
+   Robot Program
+     Set
+     MoveJ
+       End
+     Call sandTop
+     Call positionFace1
+     Call sandFace
+     MoveJ
+       Waypoint_3
+     Call sandFace
+     MoveJ
+       Waypoint_4
+       Waypoint_5
+     Call sandFace
+     Stop tool
+     MoveJ
+       End
+   positionFace1
+     MoveJ
+       clear1
+       Waypoint_2
+   sandFace
+     MoveL
+       Direction: Base Z-
+         Until (distance)
+       Direction: Tool Z+
+         Until (tool_contact_detection)
+       Start tool
+       Force
+         Direction: Tool X+
+           Until (distance)
+       Stop tool
+       Direction: Base Z+
+         Until (distance)
+   sandTop
+     MoveJ
+       Ready
+     MoveL
+       Direction: Base Z-
+         Until (tool_contact_detection)
+     Start tool
+     Wait: 0.5
+     Force
+       'MoveL'
+       MoveL
+         Direction: Base Y+
+           Until (distance)
+         Direction: Base X+
+           Until (distance)
+         Direction: Base Y-
+           Until (distance)
+         Direction: Base X-
+           Until (distance)
+     MoveL
+       Direction: Base Z+
+         Until (distance)
+     Stop tool
+   sandEdges1
+     MoveL
+       Waypoint_1
+       Direction: Base Y+
+         Until (distance)

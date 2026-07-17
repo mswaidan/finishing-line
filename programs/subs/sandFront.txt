@@ -1,0 +1,25 @@
+ Program
+   Robot Program
+     sandFront
+       MoveJ
+         Clear
+         'Waypoint_35'
+       MoveL
+         Waypoint_1
+         Zero FT Sensor
+         Find Surface
+           'Add Stop conditions from the Find Surface node'
+         Start tool
+         Wait: 0.5
+       MoveL
+         Force
+           Waypoint_34
+           Waypoint_37
+           Waypoint_36
+           Waypoint_1
+           Stop tool
+         Direction: Tool Z-
+           Until (distance)
+       MoveJ
+         Clear
+         'Waypoint_35'

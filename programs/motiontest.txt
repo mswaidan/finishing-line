@@ -1,0 +1,24 @@
+ Program
+   BeforeStart
+     Script: set_conveyor_params.script
+     Script: set_motion_mode.script
+     Script: position_move.script
+     Script: distance_move.script
+     Script: mm_move.script
+     Script: continuous_move.script
+     Script: idle_move.script
+     Script: request_id.script
+     Script: steps_per_inch.script
+     Script: mm_to_steps.script
+     Set_Conveyor_Params(1600, 16000)
+     Move_Idle()
+     Script: select_job.script
+     loaded≔0
+     MoveJ
+       Waypoint_1
+   Robot Program
+     read_job()
+     Conveyor_Move_mm(width)
+     Wait SERVER_STATE == 1
+     Conveyor_Move_mm(-width)
+     Wait SERVER_STATE == 1

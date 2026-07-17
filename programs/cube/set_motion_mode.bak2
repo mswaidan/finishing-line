@@ -1,0 +1,15 @@
+def Set_Motion_Mode(modeString):
+  modbus_set_output_register("ROBOT_SENDING", 1, False)
+  if modeString == "distance":
+    modbus_set_output_register("MOTION_MODE", 0, False)
+  elif modeString == "position":
+    modbus_set_output_register("MOTION_MODE", 1, False)
+  elif modeString == "continuous":
+    modbus_set_output_register("MOTION_MODE", 2, False)
+  elif modeString == "idle":
+    modbus_set_output_register("MOTION_MODE", 3, False)
+  else:
+    modbus_set_output_register("MOTION_MODE", 3, False)
+  end
+  modbus_set_output_register("ROBOT_SENDING", 0, False)
+end

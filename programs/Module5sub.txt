@@ -1,0 +1,8 @@
+ Program
+   Robot Program
+     sub
+       MoveJ
+         abv_place1_1
+         Wait DI[1]=HI
+         Waypoint_1
+         var_1≔0

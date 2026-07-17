@@ -1,0 +1,8 @@
+def Move_Position(position):
+  modbus_set_output_signal("ROBOT_SENDING", True, False)
+  Set_Motion_Mode("position")
+  modbus_set_output_register("POSITION", position, False)
+  Set_Request_Id()
+  sleep(.05)
+  modbus_set_output_signal("ROBOT_SENDING", False, False)
+end
