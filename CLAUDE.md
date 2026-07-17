@@ -15,7 +15,7 @@ Ground-up software rewrite of Simple Wood Goods' automated finishing line (Balti
 ## Hardware
 
 - **UR5e** — pneumatic sander + HVLP gun (water-based lacquer, 2 coats, 180 s flash each). Sand to 220; standard: evenly reflective, smooth to touch.
-- **Teknic ClearCore** — two reversible conveyor zones (Zone 1: IF↔S, Zone 2: S↔FD↔OUT), position/presence sensors, will also drive both fans + shutter.
+- **Teknic ClearCore** — two reversible conveyor zones (Zone 1: IF↔S, Zone 2: S↔FD↔OUT), position/presence sensors, will also drive both fans + shutter. Firmware source: `modbustest.ino` in THIS repo is authoritative for the rewrite (a copy also exists in a separate personal GitHub repo — treat that one as historical); firmware changes are authored here, in lockstep with `devices/registers.py` and the fake ClearCore.
 - **Stations:** INQ (infeed queue, 4 parts) → IF (new upstream fan / staging) → S (sand+spray) → FD (downstream fan) → OUT (offload at fan end).
 - **New physical:** upstream fan at IF; rigid baffle panel between IF and S with actuated shutter window (likely pneumatic slide gate); kraft-paper sacrificial facing on spray side.
 - Cell PC (currently browser-only) becomes the orchestrator host, **running Linux** (decided 2026-07-17 — `ur-rtde` has no Windows wheel; manylinux wheel deploys the identical stack developed under WSL2). HMI web app (JS) currently hosted on the NAS.
