@@ -2,7 +2,7 @@
 
 THE MANOEUVRE
 -------------
-Nothing spans IF <-> S; a part crosses by handoff: both belts run together at
+Nothing spans F1 <-> O; a part crosses by handoff: both belts run together at
 matched speed until sensors confirm the transfer. Almost every transition
 crosses that boundary, so the usual advance is a synchronised both-belt run.
 
@@ -20,14 +20,14 @@ zones to report READY, then verifies the post-shift occupancy pattern.
 STOP TARGETS ARE EDGES, chosen per transition from the move set. The rule for
 each zone is "the LAST sensor event of its part of the shift":
 
-  downstream  zone 1: INQ refill present -> IF rising (departure falls first,
-                      refill rises last); crossing only -> HANDOFF_TO_Z2 rising
-              zone 2: S->FD present -> FD rising (a departing FD part falls
-                      first); FD->OUT alone -> FD falling; crossing only ->
-                      S rising
-  upstream    zone 1: IF rising (the retreating part seats at IF)
-              zone 2: FD->S present -> S rising; retreat alone ->
-                      HANDOFF_TO_Z1 rising
+  downstream  Z1: IN refill present -> F1 rising (departure falls first,
+                      refill rises last); crossing only -> Z2_EYE rising
+              Z2: O->F2 present -> F2 rising (a departing F2 part falls
+                      first); F2->OUT alone -> F2 falling; crossing only ->
+                      O rising
+  upstream    Z1: F1 rising (the retreating part seats at F1)
+              Z2: F2->O present -> O rising; retreat alone ->
+                      Z1_EYE rising
 
 Levels would be wrong everywhere a destination starts occupied (every
 simultaneous vacate+fill) — the firmware's edge semantics carry the fix that
@@ -58,8 +58,8 @@ class TrainError(RuntimeError):
 
 
 Move = tuple[Station, Station]
-_CROSS_DOWN: Move = (Station.IF, Station.S)
-_CROSS_UP: Move = (Station.S, Station.IF)
+_CROSS_DOWN: Move = (Station.F1, Station.O)
+_CROSS_UP: Move = (Station.O, Station.F1)
 
 
 def _zone_targets(
@@ -68,23 +68,23 @@ def _zone_targets(
     """Per-zone (sensor, falling) stop edge — the last event of the shift."""
     targets: dict[Zone, tuple[SensorTarget, bool]] = {}
     if downstream:
-        if (Station.INQ, Station.IF) in moves:
-            targets[Zone.ZONE1] = (SensorTarget.IF_PRESENT, False)
+        if (Station.IN, Station.F1) in moves:
+            targets[Zone.Z1] = (SensorTarget.F1_EYE, False)
         elif _CROSS_DOWN in moves:
-            targets[Zone.ZONE1] = (SensorTarget.HANDOFF_TO_Z2, False)
-        if (Station.S, Station.FD) in moves:
-            targets[Zone.ZONE2] = (SensorTarget.FD_PRESENT, False)
-        elif (Station.FD, Station.OUT) in moves:
-            targets[Zone.ZONE2] = (SensorTarget.FD_PRESENT, True)
+            targets[Zone.Z1] = (SensorTarget.Z2_EYE, False)
+        if (Station.O, Station.F2) in moves:
+            targets[Zone.Z2] = (SensorTarget.F2_EYE, False)
+        elif (Station.F2, Station.OUT) in moves:
+            targets[Zone.Z2] = (SensorTarget.F2_EYE, True)
         elif _CROSS_DOWN in moves:
-            targets[Zone.ZONE2] = (SensorTarget.S_PRESENT, False)
+            targets[Zone.Z2] = (SensorTarget.O_EYE, False)
     else:
         if _CROSS_UP in moves:
-            targets[Zone.ZONE1] = (SensorTarget.IF_PRESENT, False)
-        if (Station.FD, Station.S) in moves:
-            targets[Zone.ZONE2] = (SensorTarget.S_PRESENT, False)
+            targets[Zone.Z1] = (SensorTarget.F1_EYE, False)
+        if (Station.F2, Station.O) in moves:
+            targets[Zone.Z2] = (SensorTarget.O_EYE, False)
         elif _CROSS_UP in moves:
-            targets[Zone.ZONE2] = (SensorTarget.HANDOFF_TO_Z1, False)
+            targets[Zone.Z2] = (SensorTarget.Z1_EYE, False)
     return targets
 
 
@@ -102,11 +102,11 @@ class TrainMover:
         if not targets:
             raise TrainError(f"no zone stop targets derivable from moves {moves}")
 
-        # The INQ queue rides its own feed conveyor (legacy M1): zone 1 alone
-        # never pulls from the queue, so an INQ->IF move needs the feed belt
+        # The IN queue rides its own feed conveyor (legacy M1): Z1 alone
+        # never pulls from the queue, so an IN->F1 move needs the feed belt
         # running alongside — and every other transition must leave it OFF, or
-        # zone-1 runs would drag unplanned parts onto IF.
-        feeding = (Station.INQ, Station.IF) in moves
+        # Z1 runs would drag unplanned parts onto F1.
+        feeding = (Station.IN, Station.F1) in moves
         if feeding:
             self._cc.set_feed_conveyor(True)
         try:
@@ -122,7 +122,7 @@ class TrainMover:
             # station empty — false before the shift, true only after it.
             dests = {dst for _src, dst in moves if dst is not Station.OUT}
             source_only = {
-                src for src, _dst in moves if src in (Station.IF, Station.S, Station.FD)
+                src for src, _dst in moves if src in (Station.F1, Station.O, Station.F2)
             } - dests
             self._wait(
                 lambda: all(self._cc.presence(d) for d in dests)

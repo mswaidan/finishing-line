@@ -17,7 +17,7 @@ sensor-stop mode triggers on exactly those edges. A teleporting shift would
 hold such a sensor high through the whole move and the armed edge would never
 fire.
 
-The IF<->S crossing needs BOTH belts (the handoff) and raises the
+The F1<->O crossing needs BOTH belts (the handoff) and raises the
 corresponding handoff sensor on arrival; handoff sensors clear when the belts
 stop.
 """
@@ -34,22 +34,22 @@ from .fake_clearcore import STATE_MOVING, FakeClearCore
 
 _DOWNSTREAM_HOPS: tuple[tuple[Station, Station, tuple[int, ...]], ...] = (
     # ordered downstream-first so one pass vacates before it fills
-    (Station.FD, Station.OUT, (2,)),
-    (Station.S, Station.FD, (2,)),
-    (Station.IF, Station.S, (1, 2)),   # handoff: both belts
-    (Station.INQ, Station.IF, (1,)),
+    (Station.F2, Station.OUT, (2,)),
+    (Station.O, Station.F2, (2,)),
+    (Station.F1, Station.O, (1, 2)),   # handoff: both belts
+    (Station.IN, Station.F1, (1,)),
 )
 _UPSTREAM_HOPS: tuple[tuple[Station, Station, tuple[int, ...]], ...] = (
     # upstream-first for the same reason
-    (Station.S, Station.IF, (1, 2)),   # handoff: both belts
-    (Station.FD, Station.S, (2,)),
+    (Station.O, Station.F1, (1, 2)),   # handoff: both belts
+    (Station.F2, Station.O, (2,)),
 )
 
 
 @dataclass
 class PhysicsSim:
     fake: FakeClearCore
-    inq_count: int = 0
+    in_count: int = 0
     transfer_s: float = 0.3
     tick_s: float = 0.02
     #: Inter-part sensor gap duration (phase A -> phase B). Defaults to a
@@ -57,11 +57,11 @@ class PhysicsSim:
     #: the firmware observes both edges.
     transit_s: float | None = None
 
-    #: Which stations physically hold a part. INQ is a count, not a slot.
+    #: Which stations physically hold a part. IN is a count, not a slot.
     occupied: set[Station] = field(default_factory=set)
     outfed: int = 0
     #: How long a finished part sits at OUT before the imaginary operator
-    #: removes it (drives the OUT_PRESENT eye and its outfeed block).
+    #: removes it (drives the OUT_EYE eye and its outfeed block).
     out_dwell_s: float = 0.5
     _out_clear_at: float | None = None
 
@@ -105,21 +105,21 @@ class PhysicsSim:
         stop, exactly like a real drive that halted on its own reflex.
         """
         mode = self.fake.holding[
-            New.ZONE1_MOTION_MODE if zone_index == 1 else New.ZONE2_MOTION_MODE
+            New.Z1_MODE if zone_index == 1 else New.Z2_MODE
         ]
         state = self.fake.input_regs[
-            New.ZONE1_STATE if zone_index == 1 else New.ZONE2_STATE
+            New.Z1_STATE if zone_index == 1 else New.Z2_STATE
         ]
         direction = self.fake.coils[
-            New.ZONE1_DIRECTION if zone_index == 1 else New.ZONE2_DIRECTION
+            New.Z1_DIR if zone_index == 1 else New.Z2_DIR
         ]
         running = mode == MODE_CONTINUOUS or (mode == MODE_SENSOR_STOP and state == STATE_MOVING)
         return running, bool(direction)
 
     def _tick(self, dt: float) -> None:
-        # Publish unconditionally: inq_count changes from OUTSIDE (batch
+        # Publish unconditionally: in_count changes from OUTSIDE (batch
         # declarations) while belts are stopped, and an event-only publish
-        # would leave the INQ eye stale — blocking the very feed move that
+        # would leave the IN eye stale — blocking the very feed move that
         # would create the next event.
         if self._out_clear_at is not None and time.monotonic() >= self._out_clear_at:
             self._out_clear_at = None
@@ -140,9 +140,9 @@ class PhysicsSim:
                     continue
                 self.occupied.add(dest)
                 if zones == (1, 2):  # crossing completed: raise the handoff
-                    down = bool(self.fake.coils[New.ZONE1_DIRECTION])
+                    down = bool(self.fake.coils[New.Z1_DIR])
                     self.fake.set_input(
-                        New.HANDOFF_TO_Z2 if down else New.HANDOFF_TO_Z1, 1
+                        New.Z2_EYE if down else New.Z1_EYE, 1
                     )
             self._transit = None
             self._publish()
@@ -154,8 +154,8 @@ class PhysicsSim:
         if not (z1_run or z2_run):
             # Belts stopped: reset the travel accumulator and drop handoffs.
             self._accum = 0.0
-            self.fake.set_input(New.HANDOFF_TO_Z1, 0)
-            self.fake.set_input(New.HANDOFF_TO_Z2, 0)
+            self.fake.set_input(New.Z1_EYE, 0)
+            self.fake.set_input(New.Z2_EYE, 0)
             return
 
         self._accum += dt
@@ -178,14 +178,14 @@ class PhysicsSim:
         for src, dest, zones in hops:
             if not hop_enabled(zones, downstream):
                 continue
-            if src is Station.INQ:
+            if src is Station.IN:
                 # The queue rides the feed conveyor (legacy M1): parts leave
-                # INQ only while it runs — zone 1 alone never pulls from it.
+                # IN only while it runs — Z1 alone never pulls from it.
                 feed_on = bool(self.fake.coils[Command.FEED_CONVEYOR])
-                if feed_on and self.inq_count > 0 and Station.IF not in work:
-                    self.inq_count -= 1
-                    arrivals.append((Station.IF, zones))
-                    work.add(Station.IF)
+                if feed_on and self.in_count > 0 and Station.F1 not in work:
+                    self.in_count -= 1
+                    arrivals.append((Station.F1, zones))
+                    work.add(Station.F1)
                 continue
             if src not in work:
                 continue
@@ -202,9 +202,9 @@ class PhysicsSim:
         self._publish()
 
     def _publish(self) -> None:
-        self.fake.set_input(New.IF_PRESENT, int(Station.IF in self.occupied))
-        self.fake.set_input(New.S_PRESENT, int(Station.S in self.occupied))
-        self.fake.set_input(New.FD_PRESENT, int(Station.FD in self.occupied))
-        self.fake.set_input(New.INQ_PRESENT, int(self.inq_count > 0))
-        self.fake.set_input(New.OUT_PRESENT, int(self._out_clear_at is not None))
-        self.fake.set_input(New.INQ_COUNT, self.inq_count, table="input")
+        self.fake.set_input(New.F1_EYE, int(Station.F1 in self.occupied))
+        self.fake.set_input(New.O_EYE, int(Station.O in self.occupied))
+        self.fake.set_input(New.F2_EYE, int(Station.F2 in self.occupied))
+        self.fake.set_input(New.IN_EYE, int(self.in_count > 0))
+        self.fake.set_input(New.OUT_EYE, int(self._out_clear_at is not None))
+        self.fake.set_input(New.IN_COUNT, self.in_count, table="input")

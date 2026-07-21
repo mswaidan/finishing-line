@@ -11,20 +11,20 @@ Two properties make this small:
     logic — §4 of the spec.
 
 2.  **Parts are never named in the tables.** The spec describes moves as
-    "Lₙ: S→FD", but the part reference is redundant: the occupancy map already
-    knows who is at S. Encoding moves as station pairs alone means the tables
+    "Lₙ: O→F2", but the part reference is redundant: the occupancy map already
+    knows who is at O. Encoding moves as station pairs alone means the tables
     hold for startup, drain, and steady state identically.
 
 THE P3 STRETCH
 --------------
-P3 is the only beat where a fan pauses: the trail is flashing at IF while the
-lead gets its spray burst at S, and the IF fan must pause so overspray is not
+P3 is the only beat where a fan pauses: the trail is flashing at F1 while the
+lead gets its spray burst at O, and the F1 fan must pause so overspray is not
 blown across the shutter plane (§7).
 
 Because flash timers bank fan-on seconds only, the trail's flash 1 cannot
 complete inside a nominal 195 s beat — it needs 180 s of *fan-on* time, and the
 fan is off for the burst. P3 therefore stretches by the burst duration. This is
-intended: the alternative is a part that leaves IF under-flashed, and §6 makes
+intended: the alternative is a part that leaves F1 under-flashed, and §6 makes
 "never under-flash" inviolable.
 
 Cost: the period is 780 s + burst, not 780 s. Every second of burst costs
@@ -50,7 +50,7 @@ def next_beat(beat: Beat) -> Beat:
 
 @dataclass(frozen=True, slots=True)
 class RobotWork:
-    """What the robot does at S during a beat.
+    """What the robot does at O during a beat.
 
     `denib` distinguishes the coat-2 beats. Whether coat 2 actually gets a denib
     pass, and how long it takes, is an OPEN ITEM (§8) — the duration below is a
@@ -67,47 +67,47 @@ class RobotWork:
 class BeatSpec:
     """One beat of the steady-state schedule (§3 table).
 
-    `if_fan_pauses_during_spray` is set only on P3, and is the sole reason a
+    `f1_fan_pauses_during_spray` is set only on P3, and is the sole reason a
     beat can exceed its nominal duration under normal operation.
     """
 
     robot: RobotWork
-    if_fan: FanState
-    fd_fan: FanState
+    f1_fan: FanState
+    f2_fan: FanState
     shutter: ShutterState
-    if_fan_pauses_during_spray: bool = False
+    f1_fan_pauses_during_spray: bool = False
 
 
 # §3 steady-state schedule. Pair n = (Lₙ, Tₙ).
 SCHEDULE: dict[Beat, BeatSpec] = {
-    # S: Lₙ sand + coat 1 | IF: Tₙ staged | FD: Tₙ₋₁ flash 2
+    # O: Lₙ sand + coat 1 | F1: Tₙ staged | F2: Tₙ₋₁ flash 2
     "P1": BeatSpec(
         robot=RobotWork(role=PartRole.LEAD, coat=1, denib=False, nominal_s=90.0),
-        if_fan=FanState.OFF,
-        fd_fan=FanState.ON,
+        f1_fan=FanState.OFF,
+        f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,
     ),
-    # S: Tₙ sand + coat 1 | IF: empty | FD: Lₙ flash 1
+    # O: Tₙ sand + coat 1 | F1: empty | F2: Lₙ flash 1
     "P2": BeatSpec(
         robot=RobotWork(role=PartRole.TRAIL, coat=1, denib=False, nominal_s=90.0),
-        if_fan=FanState.OFF,
-        fd_fan=FanState.ON,
+        f1_fan=FanState.OFF,
+        f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,
     ),
-    # S: Lₙ denib + coat 2 | IF: Tₙ flash 1 | FD: empty
+    # O: Lₙ denib + coat 2 | F1: Tₙ flash 1 | F2: empty
     # The only beat with a live upstream fan, and so the only one that stretches.
     "P3": BeatSpec(
         robot=RobotWork(role=PartRole.LEAD, coat=2, denib=True, nominal_s=45.0),
-        if_fan=FanState.ON,
-        fd_fan=FanState.OFF,
+        f1_fan=FanState.ON,
+        f2_fan=FanState.OFF,
         shutter=ShutterState.CLOSED,
-        if_fan_pauses_during_spray=True,
+        f1_fan_pauses_during_spray=True,
     ),
-    # S: Tₙ denib + coat 2 | IF: Lₙ₊₁ staged | FD: Lₙ flash 2
+    # O: Tₙ denib + coat 2 | F1: Lₙ₊₁ staged | F2: Lₙ flash 2
     "P4": BeatSpec(
         robot=RobotWork(role=PartRole.TRAIL, coat=2, denib=True, nominal_s=45.0),
-        if_fan=FanState.OFF,
-        fd_fan=FanState.ON,
+        f1_fan=FanState.OFF,
+        f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,
     ),
 }
@@ -132,29 +132,29 @@ class Transition:
 # station in a single direction, so no zone ever opposes its neighbour while a
 # part spans the boundary.
 TRANSITIONS: dict[Beat, Transition] = {
-    # Tₙ₋₁: FD→OUT · Lₙ: S→FD · Tₙ: IF→S
+    # Tₙ₋₁: F2→OUT · Lₙ: O→F2 · Tₙ: F1→O
     "P1": Transition(
         direction=Direction.DOWNSTREAM,
-        moves=((Station.FD, Station.OUT), (Station.S, Station.FD), (Station.IF, Station.S)),
+        moves=((Station.F2, Station.OUT), (Station.O, Station.F2), (Station.F1, Station.O)),
     ),
-    # Lₙ: FD→S · Tₙ: S→IF   (S vacated before FD arrives)
+    # Lₙ: F2→O · Tₙ: O→F1   (O vacated before F2 arrives)
     "P2": Transition(
         direction=Direction.UPSTREAM,
-        moves=((Station.S, Station.IF), (Station.FD, Station.S)),
+        moves=((Station.O, Station.F1), (Station.F2, Station.O)),
     ),
-    # Lₙ: S→FD · Tₙ: IF→S · Lₙ₊₁: INQ→IF
+    # Lₙ: O→F2 · Tₙ: F1→O · Lₙ₊₁: IN→F1
     "P3": Transition(
         direction=Direction.DOWNSTREAM,
-        moves=((Station.S, Station.FD), (Station.IF, Station.S), (Station.INQ, Station.IF)),
+        moves=((Station.O, Station.F2), (Station.F1, Station.O), (Station.IN, Station.F1)),
     ),
-    # Lₙ: FD→OUT · Tₙ: S→FD · Lₙ₊₁: IF→S · Tₙ₊₁: INQ→IF
+    # Lₙ: F2→OUT · Tₙ: O→F2 · Lₙ₊₁: F1→O · Tₙ₊₁: IN→F1
     "P4": Transition(
         direction=Direction.DOWNSTREAM,
         moves=(
-            (Station.FD, Station.OUT),
-            (Station.S, Station.FD),
-            (Station.IF, Station.S),
-            (Station.INQ, Station.IF),
+            (Station.F2, Station.OUT),
+            (Station.O, Station.F2),
+            (Station.F1, Station.O),
+            (Station.IN, Station.F1),
         ),
     ),
 }

@@ -51,7 +51,7 @@ class Sander:
         self._cfg = cfg
 
     def sand_face(self, product: ProductSpec) -> None:
-        """Raster one face of the part currently at S.
+        """Raster one face of the part currently at O.
 
         TODO(step 4): implement against hardware in a maintenance window.
 

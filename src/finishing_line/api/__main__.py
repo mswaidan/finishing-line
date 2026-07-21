@@ -43,7 +43,7 @@ def _build_sim(cfg):
         robot_coat1_s=4.0, robot_coat2_s=3.0, denib_duration_s=1.0,
     )
     fake = FakeClearCore(port=15030, watchdog_timeout_s=3.0, shutter_actuation_s=0.3).start()
-    physics = PhysicsSim(fake, inq_count=0, transfer_s=1.0).start()
+    physics = PhysicsSim(fake, in_count=0, transfer_s=1.0).start()
     cc = ClearCoreClient("127.0.0.1", port=15030).connect()
     robot = FakeRobot(work_s=3.0, spray_s=2.0, retract_s=0.3)
     return cfg, cc, robot, physics
@@ -90,7 +90,7 @@ def main() -> None:
         @functools.wraps(orig)
         def declare_and_feed(product: str, part_ids: list[str]) -> list[str]:
             staged = orig(product, part_ids)
-            physics.inq_count += len(staged)
+            physics.in_count += len(staged)
             return staged
 
         controller.declare_batch = declare_and_feed  # type: ignore[method-assign]

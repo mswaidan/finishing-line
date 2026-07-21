@@ -47,15 +47,15 @@ def test_each_role_works_twice_per_period():
 
 def test_exactly_one_beat_pauses_the_if_fan():
     """P3 alone — and it is the only beat that can stretch past nominal."""
-    pausing = [b for b, spec in SCHEDULE.items() if spec.if_fan_pauses_during_spray]
+    pausing = [b for b, spec in SCHEDULE.items() if spec.f1_fan_pauses_during_spray]
     assert pausing == ["P3"]
 
 
 def test_a_paused_fan_is_never_also_the_only_fan_off():
     """P3 runs IF and rests FD, so a fan pause never leaves both fans dead."""
     spec = SCHEDULE["P3"]
-    assert spec.if_fan is FanState.ON
-    assert spec.fd_fan is FanState.OFF
+    assert spec.f1_fan is FanState.ON
+    assert spec.f2_fan is FanState.OFF
 
 
 def test_two_parts_outfeed_per_period():

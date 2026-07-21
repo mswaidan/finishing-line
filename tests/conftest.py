@@ -44,14 +44,14 @@ def empty_line() -> LineState:
 
 
 def staged(*part_ids: str) -> LineState:
-    """A line with parts queued at INQ and nothing on the belt — the §4 startup
+    """A line with parts queued at IN and nothing on the belt — the §4 startup
     condition.
     """
     parts = {}
     for i, pid in enumerate(part_ids):
         role = PartRole.LEAD if i % 2 == 0 else PartRole.TRAIL
         parts[pid] = make_part(pid, role, pair_index=i // 2)
-    return LineState(parts=parts, inq_queue=tuple(part_ids), occupancy={})
+    return LineState(parts=parts, in_queue=tuple(part_ids), occupancy={})
 
 
 def place(state: LineState, station: Station, part_id: str) -> LineState:

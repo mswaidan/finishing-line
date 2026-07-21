@@ -28,7 +28,7 @@ def assign_roles(queue: Sequence[PartState]) -> list[PartState]:
     """Stamp alternating LEAD/TRAIL roles over a queue, in order.
 
     Role is positional, not a property of the part: the first of a pair leads and
-    flashes both coats at FD, the second trails and retreats to IF for flash 1.
+    flashes both coats at F2, the second trails and retreats to F1 for flash 1.
     """
     from dataclasses import replace
 

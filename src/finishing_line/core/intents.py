@@ -32,7 +32,7 @@ class Intent:
 
 @dataclass(frozen=True, slots=True)
 class SandPart(Intent):
-    """Sand the face of the part at S.
+    """Sand the face of the part at O.
 
     Composite: the robot force-holds while the conveyor traverses the part
     beneath the tool, then the robot steps the other axis. Neither device can do
@@ -45,9 +45,9 @@ class SandPart(Intent):
 
 @dataclass(frozen=True, slots=True)
 class SprayPart(Intent):
-    """Apply one coat to the part at S.
+    """Apply one coat to the part at O.
 
-    The executor must raise `spray_burst_active` for the duration, so the IF fan
+    The executor must raise `spray_burst_active` for the duration, so the F1 fan
     interlock (§7) can pause the upstream fan while the gun is live.
     """
 

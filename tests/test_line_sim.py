@@ -56,11 +56,11 @@ def test_no_part_ever_outfeeds_under_flashed(cfg):
     elapsed, dt = 0.0, 1.0
     while elapsed < 8000.0 and len(outfed) < 2:
         completed = line.advance(dt)
-        effective_if = FanState.OFF if line.gun_on else line.if_fan
-        sim_state = replace(state, if_fan=effective_if, fd_fan=line.fd_fan)
+        effective_if = FanState.OFF if line.gun_on else line.f1_fan
+        sim_state = replace(state, f1_fan=effective_if, f2_fan=line.f2_fan)
         result = step(
             sim_state,
-            Inputs(dt=dt, sensors=line.sensors(len(state.inq_queue)), completed=completed),
+            Inputs(dt=dt, sensors=line.sensors(len(state.in_queue)), completed=completed),
             cfg,
         )
         for part_id in set(sim_state.parts) - set(result.state.parts):
@@ -88,11 +88,11 @@ def _beat_durations(cfg, seconds: float = 3000.0) -> dict[str, list[float]]:
 
     while elapsed < seconds:
         completed = line.advance(dt)
-        effective_if = FanState.OFF if line.gun_on else line.if_fan
-        sim_state = replace(state, if_fan=effective_if, fd_fan=line.fd_fan)
+        effective_if = FanState.OFF if line.gun_on else line.f1_fan
+        sim_state = replace(state, f1_fan=effective_if, f2_fan=line.f2_fan)
         result = step(
             sim_state,
-            Inputs(dt=dt, sensors=line.sensors(len(state.inq_queue)), completed=completed),
+            Inputs(dt=dt, sensors=line.sensors(len(state.in_queue)), completed=completed),
             cfg,
         )
         state = result.state
@@ -132,7 +132,7 @@ def test_p3_is_measurably_longer_than_the_other_beats(cfg):
 def test_p3_stretches_by_the_burst_pause(cfg):
     """The consequence of banking fan-on seconds only.
 
-    The trail's entire flash 1 is the P3 beat, and the IF fan is off while the
+    The trail's entire flash 1 is the P3 beat, and the F1 fan is off while the
     lead is sprayed. So P3 must run longer than a nominal beat — this asserts
     the cost is real and shows up in wall-clock, not just in theory.
     """
@@ -148,7 +148,7 @@ def test_p3_stretches_by_the_burst_pause(cfg):
 
 
 def test_target_cycle_requires_a_zero_pause(cfg):
-    """6.5 min/part is only reachable if the IF fan never pauses."""
+    """6.5 min/part is only reachable if the F1 fan never pauses."""
     assert cfg.nominal_seconds_per_part() > 390.0
     no_pause = replace(cfg, spray_burst_pause_s=0.0)
     assert no_pause.nominal_seconds_per_part() == pytest.approx(390.0)
@@ -161,7 +161,7 @@ def test_sensor_mismatch_faults_and_halts_zones(cfg):
     from finishing_line.core.model import SensorSnapshot
 
     state = staged("L1", "T1")
-    phantom = SensorSnapshot(occupied=frozenset({Station.S}), robot_clear=True)
+    phantom = SensorSnapshot(occupied=frozenset({Station.O}), robot_clear=True)
     result = step(state, Inputs(dt=1.0, sensors=phantom), cfg)
 
     assert result.state.phase is Phase.FAULTED
@@ -181,12 +181,12 @@ def test_flash_timers_keep_running_while_faulted(cfg):
     part = make_part("p1", PartRole.LEAD, coats_applied=1)
     state = LineState(
         parts={"p1": part},
-        occupancy={Station.FD: "p1"},
-        fd_fan=FanState.ON,
+        occupancy={Station.F2: "p1"},
+        f2_fan=FanState.ON,
         phase=Phase.FAULTED,
         fault="protective stop",
     )
-    sensors = SensorSnapshot(occupied=frozenset({Station.FD}))
+    sensors = SensorSnapshot(occupied=frozenset({Station.F2}))
     result = step(state, Inputs(dt=60.0, sensors=sensors), cfg)
 
     assert result.state.parts["p1"].flash_1_s == 60.0

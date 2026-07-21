@@ -29,15 +29,15 @@ def _drive(state, line, cfg, seconds, dt=1.0, inject_fault_at=None):
     result = None
     while elapsed < seconds:
         completed = line.advance(dt)
-        effective_if = FanState.OFF if line.gun_on else line.if_fan
-        sim_state = replace(state, if_fan=effective_if, fd_fan=line.fd_fan)
+        effective_if = FanState.OFF if line.gun_on else line.f1_fan
+        sim_state = replace(state, f1_fan=effective_if, f2_fan=line.f2_fan)
         fault = None
         if inject_fault_at is not None and elapsed >= inject_fault_at:
             fault = "protective stop"
             inject_fault_at = None
         result = step(
             sim_state,
-            Inputs(dt=dt, sensors=line.sensors(len(state.inq_queue)),
+            Inputs(dt=dt, sensors=line.sensors(len(state.in_queue)),
                    completed=completed, fault=fault),
             cfg,
         )
@@ -66,13 +66,13 @@ def test_protective_stop_halts_zones_but_parts_keep_drying(cfg):
     assert flashing, "fault should have landed after at least one coat"
     before = {p.part_id: p.active_flash_seconds() for p in flashing}
 
-    sensors = line.sensors(len(state.inq_queue))
+    sensors = line.sensors(len(state.in_queue))
     result = step(state, Inputs(dt=120.0, sensors=sensors), cfg)
     state = result.state
 
     still_at_fans = [
         p for p in state.parts.values()
-        if p.part_id in before and state.station_of(p.part_id) in (Station.IF, Station.FD)
+        if p.part_id in before and state.station_of(p.part_id) in (Station.F1, Station.F2)
     ]
     for part in still_at_fans:
         station = state.station_of(part.part_id)
@@ -95,7 +95,7 @@ def test_resume_after_protective_stop_completes_the_batch(cfg):
 
     # Operator scan agrees with the controller here (nothing physically moved),
     # so resume with no corrections.
-    result = resume(state, line.sensors(len(state.inq_queue)))
+    result = resume(state, line.sensors(len(state.in_queue)))
     assert result.state.phase is not Phase.FAULTED
     assert result.state.fault is None
     assert result.intents, "resume must emit the re-home (MoveToSafePose)"
@@ -130,7 +130,7 @@ def test_resume_does_not_double_coat(cfg):
     assert coated, "expected the fault to land after coat 1 was recorded"
     coats_at_fault = {p.part_id: p.coats_applied for p in state.parts.values()}
 
-    result = resume(state, line.sensors(len(state.inq_queue)))
+    result = resume(state, line.sensors(len(state.in_queue)))
     line.queue.clear()
     line.current = None
     line.robot_clear = True
@@ -153,10 +153,10 @@ def test_resume_with_corrected_occupancy_after_sensor_mismatch(cfg):
     from finishing_line.core.model import LineState, PartRole
 
     part = make_part("p1", PartRole.LEAD, coats_applied=1, flash_1_s=50.0)
-    # Controller believes S; the part is actually at FD.
-    state = LineState(parts={"p1": part}, occupancy={Station.S: "p1"})
+    # Controller believes O; the part is actually at F2.
+    state = LineState(parts={"p1": part}, occupancy={Station.O: "p1"})
     truth = SensorSnapshot(
-        occupied=frozenset({Station.FD}), shutter=ShutterState.CLOSED, robot_clear=True
+        occupied=frozenset({Station.F2}), shutter=ShutterState.CLOSED, robot_clear=True
     )
 
     faulted = step(state, Inputs(dt=1.0, sensors=truth), cfg)
@@ -164,18 +164,18 @@ def test_resume_with_corrected_occupancy_after_sensor_mismatch(cfg):
 
     # Wrong correction (agrees with neither belief nor sensors) is rejected.
     rejected = resume(
-        faulted.state, truth, confirmed_occupancy={Station.IF: "p1"}
+        faulted.state, truth, confirmed_occupancy={Station.F1: "p1"}
     )
     assert rejected.state.phase is Phase.FAULTED
     assert "resume rejected" in rejected.blocked_by
 
     # Correct reconstruction resumes, and the part kept its banked flash time.
     resumed = resume(
-        faulted.state, truth, confirmed_occupancy={Station.FD: "p1"}, beat="P2"
+        faulted.state, truth, confirmed_occupancy={Station.F2: "p1"}, beat="P2"
     )
     assert resumed.state.phase is Phase.ROBOT_WORK
     assert resumed.state.parts["p1"].flash_1_s == 50.0
-    assert resumed.state.occupancy == {Station.FD: "p1"}
+    assert resumed.state.occupancy == {Station.F2: "p1"}
 
 
 def test_resume_is_refused_when_not_faulted(cfg):

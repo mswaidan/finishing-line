@@ -87,8 +87,8 @@ class Executor:
             if self._fault is None:
                 self._fault = reason
         self._drain()
-        self._cc.set_zone_idle(Zone.ZONE1)
-        self._cc.set_zone_idle(Zone.ZONE2)
+        self._cc.set_zone_idle(Zone.Z1)
+        self._cc.set_zone_idle(Zone.Z2)
 
     def reset(self) -> None:
         """Clear the fault latch after operator recovery (machine.resume)."""

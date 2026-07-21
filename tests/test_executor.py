@@ -65,9 +65,9 @@ def test_batch_executes_in_order(fake, rig):
     """The P3 bracket: fan OFF, spray, fan ON — order is the guarantee."""
     executor, robot = rig
     batch = (
-        SetFan(station=Station.IF, state=FanState.OFF),
+        SetFan(station=Station.F1, state=FanState.OFF),
         SprayPart(part_id="p1", coat=2),
-        SetFan(station=Station.IF, state=FanState.ON),
+        SetFan(station=Station.F1, state=FanState.ON),
         MoveToSafePose(),
     )
     executor.submit(batch)
@@ -76,7 +76,7 @@ def test_batch_executes_in_order(fake, rig):
     assert {i.intent_id for i in batch} == done
     assert robot.log == [("spray2", "p1"), ("safe_pose", "")]
     # After the ordered batch, the fan command must have landed back ON.
-    assert fake.holding[New.IF_FAN_CMD] == 1
+    assert fake.holding[New.F1_FAN] == 1
 
 
 def test_device_failure_poisons_and_halts(fake, cc, rig):
@@ -98,8 +98,8 @@ def test_device_failure_poisons_and_halts(fake, cc, rig):
     assert executor.completed() == frozenset()
     assert robot.log == [], "work after the failure must not run"
     # Zones were idled by the halt.
-    assert fake.holding[New.ZONE1_MOTION_MODE] == MODE_IDLE
-    assert fake.holding[New.ZONE2_MOTION_MODE] == MODE_IDLE
+    assert fake.holding[New.Z1_MODE] == MODE_IDLE
+    assert fake.holding[New.Z2_MODE] == MODE_IDLE
 
     executor.reset()
     assert executor.fault_reason() is None
@@ -118,15 +118,15 @@ def test_halt_zones_jumps_the_queue(fake, rig):
 
     assert halt_latency < 0.5, f"halt took {halt_latency:.2f}s — it queued behind the job"
     assert executor.fault_reason() == "e-stop"
-    assert fake.holding[New.ZONE1_MOTION_MODE] == MODE_IDLE
+    assert fake.holding[New.Z1_MODE] == MODE_IDLE
     # Fans were NOT touched by the halt (§7: parts keep drying).
 
 
 def test_fans_untouched_by_halt(fake, cc, rig):
     executor, _robot = rig
-    cc.set_fan(Station.FD, True)
+    cc.set_fan(Station.F2, True)
     time.sleep(0.05)
     executor.halt("test halt")
     time.sleep(0.05)
-    assert fake.holding[New.FD_FAN_CMD] == 1, "halt must not stop a running fan"
+    assert fake.holding[New.F2_FAN] == 1, "halt must not stop a running fan"
     executor.reset()

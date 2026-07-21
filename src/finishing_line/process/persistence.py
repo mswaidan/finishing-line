@@ -56,11 +56,11 @@ def serialize_state(state: LineState, declared: int) -> dict:
         "pair_index": state.pair_index,
         "fault": state.fault,
         "fault_phase": state.fault_phase,
-        "if_fan": str(state.if_fan),
-        "fd_fan": str(state.fd_fan),
+        "f1_fan": str(state.f1_fan),
+        "f2_fan": str(state.f2_fan),
         "shutter": str(state.shutter),
         "occupancy": {st.name: pid for st, pid in state.occupancy.items()},
-        "inq_queue": list(state.inq_queue),
+        "in_queue": list(state.in_queue),
         "parts": {
             pid: {
                 "product": str(p.product),
@@ -95,14 +95,14 @@ def deserialize_state(data: dict) -> tuple[LineState, int]:
     state = LineState(
         parts=parts,
         occupancy={Station[k]: v for k, v in data["occupancy"].items()},
-        inq_queue=tuple(data["inq_queue"]),
+        in_queue=tuple(data["in_queue"]),
         beat=data["beat"],
         pair_index=int(data["pair_index"]),
         # Normalise to the enum at the boundary: plain strings pass equality
         # checks but silently fail any `is` comparison against Phase members.
         phase=Phase(data["phase"]),
-        if_fan=FanState(data["if_fan"]),
-        fd_fan=FanState(data["fd_fan"]),
+        f1_fan=FanState(data["f1_fan"]),
+        f2_fan=FanState(data["f2_fan"]),
         shutter=ShutterState(data["shutter"]),
         fault=data["fault"],
         fault_phase=data["fault_phase"],
@@ -119,7 +119,7 @@ def as_restored(state: LineState) -> LineState:
     the beat's train move. Pending/in-flight are gone with the old process.
     """
     state = replace(state, pending=(), in_flight=())
-    if not state.parts and not state.occupancy and not state.inq_queue:
+    if not state.parts and not state.occupancy and not state.in_queue:
         return replace(state, phase=str(Phase.ROBOT_WORK), fault=None, fault_phase=None)
     if state.fault is not None:
         return replace(state, phase=str(Phase.FAULTED))
@@ -176,7 +176,7 @@ class StateStore:
             str(state.phase),
             state.fault,
             tuple(sorted((st.name, pid) for st, pid in state.occupancy.items())),
-            state.inq_queue,
+            state.in_queue,
             tuple(sorted((pid, p.coats_applied, p.is_wet) for pid, p in state.parts.items())),
         )
 

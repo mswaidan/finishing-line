@@ -32,9 +32,9 @@ def test_even_batch_drains_completely(cfg):
 
 def test_odd_batch_lone_lead_drains(cfg):
     """§5 odd count: the lone lead runs the lead path with S idle on trail
-    beats — coat 1, FD flash 1, coat 2, FD flash 2, OUT. The IF fan never runs
+    beats — coat 1, F2 flash 1, coat 2, F2 flash 2, OUT. The F1 fan never runs
     for it, and the role-mismatch check never fires because the lone part is
-    never at S on a trail beat.
+    never at O on a trail beat.
     """
     state = staged("L1", "T1", "L2")  # L2 is the lone lead
     line = FakeLine(cfg=cfg)

@@ -88,7 +88,7 @@
 </footer>
 
 <script>
-const STATIONS = ["INQ","IF","S","FD","OUT"];
+const STATIONS = ["IN","F1","O","F2","OUT"];
 const $ = id => document.getElementById(id);
 let latest = null;
 
@@ -118,8 +118,8 @@ function render(s){
   const target = s.config.flash_seconds;
   $("stations").innerHTML = STATIONS.map(st => {
     let inner = "";
-    if (st === "INQ")
-      inner = s.inq_queue.map(id => `<div class="part"><b>${id}</b><div class="meta">queued</div></div>`).join("");
+    if (st === "IN")
+      inner = s.in_queue.map(id => `<div class="part"><b>${id}</b><div class="meta">queued</div></div>`).join("");
     else if (st === "OUT")
       inner = s.clearcore.sensors?.OUT
         ? `<div class="part"><b>finished part</b><div class="meta wet">REMOVE PART</div></div>`
@@ -128,7 +128,7 @@ function render(s){
       const pid = s.occupancy[st];
       if (pid && s.parts[pid]) inner = partCard(pid, s.parts[pid], target);
     }
-    const fan = (st==="IF"||st==="FD")
+    const fan = (st==="F1"||st==="F2")
       ? `<span class="fan ${s.clearcore.fans?.[st] ? "on":""}">${s.clearcore.fans?.[st] ? "FAN ON":"fan off"}</span>` : "";
     return `<div class="station"><h3>${st}${fan}</h3>${inner}</div>`;
   }).join("");
@@ -138,7 +138,7 @@ function render(s){
     ack.style.display = "block";
     if (!ack.dataset.built){
       const ids = ["", ...Object.keys(s.parts)];
-      $("ack-selects").innerHTML = ["IF","S","FD"].map(st =>
+      $("ack-selects").innerHTML = ["F1","O","F2"].map(st =>
         `<label>${st} <select data-st="${st}">${ids.map(i =>
           `<option ${s.occupancy[st]===i?"selected":""}>${i}</option>`).join("")}</select></label>`).join("");
       ack.dataset.built = "1";

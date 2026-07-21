@@ -22,7 +22,7 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-CLEARCORE_HOST = "192.168.1.18"
+CLEARCORE_HOST = "192.168.1.19"  # rewrite unit; legacy production unit is .18
 CLEARCORE_UNIT_ID = 255
 
 
@@ -76,11 +76,11 @@ class New(IntEnum):
     existing 1-6 / 100-108 / 200-208 blocks with room to grow.
 
     Zone motors: the old firmware drives M0 (main conveyor), M1 (feed), M2
-    (brush). The rewrite needs ZONE1 (INQ<->IF) + ZONE2 (S<->FD<->OUT) + 2 fans
+    (brush). The rewrite needs Z1 (IN<->F1) + Z2 (O<->F2<->OUT) + 2 fans
     + shutter. M3 is free, but which physical motor becomes which zone is an
     OPEN hardware mapping question.
 
-    The IF<->S handoff sensors (407/408) confirm the sensor-terminated crossing
+    The F1<->O handoff sensors (407/408) confirm the sensor-terminated crossing
     between the two belts — see process/train.py for the manoeuvre.
 
     sim/fake_clearcore.py implements this map's behaviour (echo handshake,
@@ -89,55 +89,55 @@ class New(IntEnum):
     """
 
     # Shutter
-    SHUTTER_CMD = 300        # 0 = closed, 1 = open
-    SHUTTER_FEEDBACK = 400   # 0 = closed, 1 = open, 2 = moving/unknown
+    SH_CMD = 300        # 0 = closed, 1 = open
+    SH_FB = 400   # 0 = closed, 1 = open, 2 = moving/unknown
 
     # Fans. Fail ON: firmware forces these on if the heartbeat stops.
-    IF_FAN_CMD = 301
-    FD_FAN_CMD = 302
-    IF_FAN_FEEDBACK = 401
-    FD_FAN_FEEDBACK = 402
+    F1_FAN = 301
+    F2_FAN = 302
+    F1_FAN_FB = 401
+    F2_FAN_FB = 402
 
     # Presence sensors at the tracked stations
-    IF_PRESENT = 403
-    S_PRESENT = 404
-    FD_PRESENT = 405
-    INQ_COUNT = 406
+    F1_EYE = 403
+    O_EYE = 404
+    F2_EYE = 405
+    IN_COUNT = 406
 
-    # IF<->S handoff confirmation — the crossing is sensor-terminated (both
+    # F1<->O handoff confirmation — the crossing is sensor-terminated (both
     # belts run together until the part is confirmed on the receiving belt).
     # One per direction.
-    HANDOFF_TO_Z2 = 407   # part has fully entered zone 2 (downstream crossing)
-    HANDOFF_TO_Z1 = 408   # part has fully entered zone 1 (the P2->P3 retreat)
-    #: Queue-head eye: a part is staged at the front of the INQ feed. Feed
+    Z2_EYE = 407   # part has fully entered Z2 (downstream crossing)
+    Z1_EYE = 408   # part has fully entered Z1 (the P2->P3 retreat)
+    #: Queue-head eye: a part is staged at the front of the IN feed. Feed
     #: moves are BLOCKED (not faulted) while this reads empty.
-    INQ_PRESENT = 409
+    IN_EYE = 409
     #: Outfeed occupancy eye: a finished part awaits removal at OUT. Outfeed
     #: moves are BLOCKED while set — never push a cube into a cube.
-    OUT_PRESENT = 415
+    OUT_EYE = 415
 
     # Zone motion. Distance is UNSIGNED steps; sign travels on the direction
     # coil, exactly like the legacy conveyor block.
-    ZONE1_MOTION_MODE = 310
-    ZONE1_DISTANCE = 311
-    ZONE1_REQUEST_ID = 312
-    ZONE1_DIRECTION = 313    # coil: 1 = downstream
+    Z1_MODE = 310
+    Z1_DIST = 311
+    Z1_REQID = 312
+    Z1_DIR = 313    # coil: 1 = downstream
     #: Sensor-stop target for MODE_SENSOR_STOP (see SensorTarget below).
-    ZONE1_TARGET = 314
-    ZONE2_MOTION_MODE = 320
-    ZONE2_DISTANCE = 321
-    ZONE2_REQUEST_ID = 322
-    ZONE2_DIRECTION = 323    # coil: 1 = downstream
-    ZONE2_TARGET = 324
-    ZONE1_STATE = 410
-    ZONE2_STATE = 411
+    Z1_TARGET = 314
+    Z2_MODE = 320
+    Z2_DIST = 321
+    Z2_REQID = 322
+    Z2_DIR = 323    # coil: 1 = downstream
+    Z2_TARGET = 324
+    Z1_STATE = 410
+    Z2_STATE = 411
     # Move-acceptance ack: firmware mirrors the REQUEST_ID it last RECOGNISED.
     # A Modbus write only confirms the register changed, not that the firmware
     # loop acted on it — so "state == READY" right after a write is ambiguous
     # (done, or not yet noticed?). The client polls ack == id before trusting
     # state transitions. Same job the legacy 200-block echo did.
-    ZONE1_REQID_ACK = 413
-    ZONE2_REQID_ACK = 414
+    Z1_ACK = 413
+    Z2_ACK = 414
     #: 1 while the firmware watchdog has tripped (heartbeat stale): zones
     #: halted, fans forced ON. Clears when the heartbeat advances again.
     WATCHDOG_TRIPPED = 412
@@ -167,11 +167,11 @@ class SensorTarget(IntEnum):
     we can give it.
     """
 
-    IF_PRESENT = 1
-    S_PRESENT = 2
-    FD_PRESENT = 3
-    HANDOFF_TO_Z1 = 4
-    HANDOFF_TO_Z2 = 5
+    F1_EYE = 1
+    O_EYE = 2
+    F2_EYE = 3
+    Z1_EYE = 4
+    Z2_EYE = 5
     #: Flag: add to a sensor code to stop on its FALLING edge.
     FALLING = 8
 

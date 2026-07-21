@@ -67,17 +67,32 @@ struct ZoneBlock {
   bool edgePrev;
 };
 
-ZoneBlock zone1 = {REG_ZONE1_MOTION_MODE, REG_ZONE1_DISTANCE, REG_ZONE1_REQUEST_ID,
-                   REG_ZONE1_DIRECTION,   REG_ZONE1_TARGET,   REG_ZONE1_STATE,
-                   REG_ZONE1_REQID_ACK,   &MOTOR_ZONE1};
-ZoneBlock zone2 = {REG_ZONE2_MOTION_MODE, REG_ZONE2_DISTANCE, REG_ZONE2_REQUEST_ID,
-                   REG_ZONE2_DIRECTION,   REG_ZONE2_TARGET,   REG_ZONE2_STATE,
-                   REG_ZONE2_REQID_ACK,   &MOTOR_ZONE2};
+ZoneBlock zone1 = {REG_Z1_MODE, REG_Z1_DIST, REG_Z1_REQID,
+                   REG_Z1_DIR,   REG_Z1_TARGET,   REG_Z1_STATE,
+                   REG_Z1_ACK,   &Z1_BELT};
+ZoneBlock zone2 = {REG_Z2_MODE, REG_Z2_DIST, REG_Z2_REQID,
+                   REG_Z2_DIR,   REG_Z2_TARGET,   REG_Z2_STATE,
+                   REG_Z2_ACK,   &Z2_BELT};
 
 // --------------------------------------------------------------- watchdog
 uint16_t lastHeartbeat = 0;
 uint32_t heartbeatSeenAtMs = 0;
 bool watchdogArmed = false;
+
+// ------------------------------------------------- serial diagnostics (USB)
+// Bench bring-up only: the register contract (what the fake mirrors) is
+// unchanged — this is firmware-side observability with no fake counterpart,
+// like debounce and StepsComplete above.
+bool linkWasUp = true;          // setup() blocks until link is up, so start true
+uint32_t lastLinkCheckMs = 0;
+
+void printNet(const char *tag) {
+  IPAddress ip(CC_IP_ADDRESS);
+  Serial.print(tag);
+  Serial.print("ip=");
+  Serial.print(ip[0]); Serial.print('.'); Serial.print(ip[1]); Serial.print('.');
+  Serial.print(ip[2]); Serial.print('.'); Serial.println(ip[3]);
+}
 
 bool sensorValue(uint16_t reg) { return regs.discrete[reg]; }
 
@@ -145,11 +160,11 @@ void tickZone(ZoneBlock &z, bool tripped) {
         uint16_t raw = regs.holding[z.targetReg];
         z.edgeWantRising = !(raw & TARGET_FALLING_FLAG);
         switch (raw & ~TARGET_FALLING_FLAG) {
-          case TARGET_IF_PRESENT: z.edgeSensorReg = REG_IF_PRESENT; break;
-          case TARGET_S_PRESENT: z.edgeSensorReg = REG_S_PRESENT; break;
-          case TARGET_FD_PRESENT: z.edgeSensorReg = REG_FD_PRESENT; break;
-          case TARGET_HANDOFF_TO_Z1: z.edgeSensorReg = REG_HANDOFF_TO_Z1; break;
-          case TARGET_HANDOFF_TO_Z2: z.edgeSensorReg = REG_HANDOFF_TO_Z2; break;
+          case TARGET_F1_EYE: z.edgeSensorReg = REG_F1_EYE; break;
+          case TARGET_O_EYE: z.edgeSensorReg = REG_O_EYE; break;
+          case TARGET_F2_EYE: z.edgeSensorReg = REG_F2_EYE; break;
+          case TARGET_Z1_EYE: z.edgeSensorReg = REG_Z1_EYE; break;
+          case TARGET_Z2_EYE: z.edgeSensorReg = REG_Z2_EYE; break;
           default:
             // Unknown target: refuse to run. READY without ack tells the
             // orchestrator the move was not accepted (ack poll times out).
@@ -187,10 +202,18 @@ void tickZone(ZoneBlock &z, bool tripped) {
 }  // namespace
 
 void firmwareSetup() {
+  // USB serial for bench diagnostics. Bounded wait so a headless boot (no host
+  // attached) proceeds after 2 s instead of hanging on `while (!Serial)`.
+  Serial.begin(115200);
+  uint32_t serialWait = Milliseconds();
+  while (!Serial && Milliseconds() - serialWait < 2000) continue;
+  Serial.println();
+  Serial.println("=== finishing-line ClearCore firmware (rewrite) ===");
+
   // Motors: open-loop step/dir, legacy clocking and polarity (ino:192-207).
   MotorMgr.MotorInputClocking(MotorManager::CLOCK_RATE_LOW);
   MotorMgr.MotorModeSet(MotorManager::MOTOR_ALL, Connector::CPM_MODE_STEP_AND_DIR);
-  MotorDriver *motors[] = {&MOTOR_ZONE1, &MOTOR_ZONE2, &MOTOR_FEED, &MOTOR_BRUSH};
+  MotorDriver *motors[] = {&Z1_BELT, &Z2_BELT, &IN_BELT, &O_BRUSH};
   for (MotorDriver *m : motors) {
     m->VelMax(DEFAULT_VELOCITY_SPS);
     m->AccelMax(DEFAULT_ACCEL_SPS2);
@@ -198,22 +221,22 @@ void firmwareSetup() {
     m->PolarityInvertSDDirection(INVERT_STEP_DIRECTION);
     m->EnableRequest(true);
   }
-  MOTOR_BRUSH.VelMax(BRUSH_VELOCITY_SPS);
-  MOTOR_BRUSH.AccelMax(BRUSH_ACCEL_SPS2);
+  O_BRUSH.VelMax(BRUSH_VELOCITY_SPS);
+  O_BRUSH.AccelMax(BRUSH_ACCEL_SPS2);
 
-  PIN_IF_PRESENT.Mode(Connector::INPUT_DIGITAL);
-  PIN_S_PRESENT.Mode(Connector::INPUT_DIGITAL);
-  PIN_FD_PRESENT.Mode(Connector::INPUT_DIGITAL);
-  PIN_HANDOFF_TO_Z2.Mode(Connector::INPUT_DIGITAL);
-  PIN_HANDOFF_TO_Z1.Mode(Connector::INPUT_DIGITAL);
-  PIN_INQ_PRESENT.Mode(Connector::INPUT_DIGITAL);
-  PIN_OUT_PRESENT.Mode(Connector::INPUT_DIGITAL);
-  PIN_SHUTTER_OPEN_SW.Mode(Connector::INPUT_DIGITAL);
-  PIN_SHUTTER_CLOSED_SW.Mode(Connector::INPUT_DIGITAL);
-  PIN_IF_FAN.Mode(Connector::OUTPUT_DIGITAL);
-  PIN_FD_FAN.Mode(Connector::OUTPUT_DIGITAL);
-  PIN_SHUTTER_OPEN_SOL.Mode(Connector::OUTPUT_DIGITAL);
-  PIN_SHUTTER_CLOSE_SOL.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_F1_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_O_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_F2_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_Z2_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_Z1_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_IN_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_OUT_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_SH_OPEN_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_SH_CLOSED_EYE.Mode(Connector::INPUT_DIGITAL);
+  PIN_F1_FAN.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_F2_FAN.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_SH_OPEN_SOL.Mode(Connector::OUTPUT_DIGITAL);
+  PIN_SH_CLOSE_SOL.Mode(Connector::OUTPUT_DIGITAL);
 
   // Static IP — see io_map.h for why DHCP is deliberately gone.
   IPAddress ip(CC_IP_ADDRESS);
@@ -221,32 +244,49 @@ void firmwareSetup() {
   IPAddress mask(CC_NETMASK);
   uint8_t mac[] = {0xDE, 0xAD, 0xBE, 0xEF, 0xFE, 0xEE};  // legacy MAC (ino:27)
   Ethernet.begin(mac, ip, gw, gw, mask);
+  printNet("net: ");
+  Serial.print("waiting for Ethernet link");
   while (Ethernet.linkStatus() == LinkOFF) {
+    Serial.print('.');
     delay(500);  // no cable, nothing to do — same posture as legacy
   }
+  Serial.println(" UP");
   server.begin();
+  Serial.println("modbus: listening on :502");
 
   regs.inputRegs[REG_SERVER_STATE] = STATE_READY;  // legacy observability
-  regs.inputRegs[REG_ZONE1_STATE] = STATE_READY;
-  regs.inputRegs[REG_ZONE2_STATE] = STATE_READY;
-  regs.holding[REG_ZONE1_MOTION_MODE] = MODE_IDLE;
-  regs.holding[REG_ZONE2_MOTION_MODE] = MODE_IDLE;
+  regs.inputRegs[REG_Z1_STATE] = STATE_READY;
+  regs.inputRegs[REG_Z2_STATE] = STATE_READY;
+  regs.holding[REG_Z1_MODE] = MODE_IDLE;
+  regs.holding[REG_Z2_MODE] = MODE_IDLE;
 }
 
 void firmwareLoop() {
   uint32_t nowMs = Milliseconds();
   server.poll();
 
+  // ---- serial: report Ethernet link transitions (bench cable work). Polled
+  // at 4 Hz so we never hammer the PHY from the fast control loop.
+  if (nowMs - lastLinkCheckMs >= 250) {
+    lastLinkCheckMs = nowMs;
+    bool linkUp = Ethernet.linkStatus() != LinkOFF;
+    if (linkUp != linkWasUp) {
+      linkWasUp = linkUp;
+      if (linkUp) printNet("link UP  ");
+      else Serial.println("link DOWN");
+    }
+  }
+
   // ---- sensors -> discrete inputs (debounced; these gate belt stops)
-  regs.discrete[REG_IF_PRESENT] = dbIf.update(PIN_IF_PRESENT.State(), nowMs);
-  regs.discrete[REG_S_PRESENT] = dbS.update(PIN_S_PRESENT.State(), nowMs);
-  regs.discrete[REG_FD_PRESENT] = dbFd.update(PIN_FD_PRESENT.State(), nowMs);
-  regs.discrete[REG_HANDOFF_TO_Z1] = dbHandZ1.update(PIN_HANDOFF_TO_Z1.State(), nowMs);
-  regs.discrete[REG_HANDOFF_TO_Z2] = dbHandZ2.update(PIN_HANDOFF_TO_Z2.State(), nowMs);
-  regs.discrete[REG_INQ_PRESENT] = dbInq.update(PIN_INQ_PRESENT.State(), nowMs);
-  regs.discrete[REG_OUT_PRESENT] = dbOut.update(PIN_OUT_PRESENT.State(), nowMs);
-  bool shutOpen = dbShutOpen.update(PIN_SHUTTER_OPEN_SW.State(), nowMs);
-  bool shutClosed = dbShutClosed.update(PIN_SHUTTER_CLOSED_SW.State(), nowMs);
+  regs.discrete[REG_F1_EYE] = dbIf.update(PIN_F1_EYE.State(), nowMs);
+  regs.discrete[REG_O_EYE] = dbS.update(PIN_O_EYE.State(), nowMs);
+  regs.discrete[REG_F2_EYE] = dbFd.update(PIN_F2_EYE.State(), nowMs);
+  regs.discrete[REG_Z1_EYE] = dbHandZ1.update(PIN_Z1_EYE.State(), nowMs);
+  regs.discrete[REG_Z2_EYE] = dbHandZ2.update(PIN_Z2_EYE.State(), nowMs);
+  regs.discrete[REG_IN_EYE] = dbInq.update(PIN_IN_EYE.State(), nowMs);
+  regs.discrete[REG_OUT_EYE] = dbOut.update(PIN_OUT_EYE.State(), nowMs);
+  bool shutOpen = dbShutOpen.update(PIN_SH_OPEN_EYE.State(), nowMs);
+  bool shutClosed = dbShutClosed.update(PIN_SH_CLOSED_EYE.State(), nowMs);
 
   // ---- legacy echo handshake (updateLocals of the old firmware)
   regs.inputRegs[ECHO_MOTION_MODE] = regs.holding[CMD_MOTION_MODE];
@@ -277,26 +317,26 @@ void firmwareLoop() {
   // must never stop parts drying). Feedback mirrors the OUTPUT we drive —
   // truthful about the relay, not the airflow; a real airflow sensor can
   // replace it on these same registers later.
-  bool ifFan = tripped || regs.holding[REG_IF_FAN_CMD] != 0;
-  bool fdFan = tripped || regs.holding[REG_FD_FAN_CMD] != 0;
-  PIN_IF_FAN.State(ifFan);
-  PIN_FD_FAN.State(fdFan);
-  regs.inputRegs[REG_IF_FAN_FEEDBACK] = ifFan ? 1 : 0;
-  regs.inputRegs[REG_FD_FAN_FEEDBACK] = fdFan ? 1 : 0;
+  bool ifFan = tripped || regs.holding[REG_F1_FAN] != 0;
+  bool fdFan = tripped || regs.holding[REG_F2_FAN] != 0;
+  PIN_F1_FAN.State(ifFan);
+  PIN_F2_FAN.State(fdFan);
+  regs.inputRegs[REG_F1_FAN_FB] = ifFan ? 1 : 0;
+  regs.inputRegs[REG_F2_FAN_FB] = fdFan ? 1 : 0;
 
   // ---- shutter: double-solenoid 5/2 detented valve — the commanded side is
   // energised continuously, the opposite side off; de-energised it HOLDS
   // position (§7: shutter holds state on fault, through power loss included).
   // Feedback is the REAL end switches, never an echo — zone motion gates on it.
-  bool wantOpen = regs.holding[REG_SHUTTER_CMD] != 0;
-  PIN_SHUTTER_OPEN_SOL.State(wantOpen);
-  PIN_SHUTTER_CLOSE_SOL.State(!wantOpen);
+  bool wantOpen = regs.holding[REG_SH_CMD] != 0;
+  PIN_SH_OPEN_SOL.State(wantOpen);
+  PIN_SH_CLOSE_SOL.State(!wantOpen);
   if (shutOpen && !shutClosed) {
-    regs.inputRegs[REG_SHUTTER_FEEDBACK] = 1;
+    regs.inputRegs[REG_SH_FB] = 1;
   } else if (shutClosed && !shutOpen) {
-    regs.inputRegs[REG_SHUTTER_FEEDBACK] = 0;
+    regs.inputRegs[REG_SH_FB] = 0;
   } else {
-    regs.inputRegs[REG_SHUTTER_FEEDBACK] = 2;  // travelling (or switch fault)
+    regs.inputRegs[REG_SH_FB] = 2;  // travelling (or switch fault)
   }
 
   // ---- zones
@@ -304,18 +344,18 @@ void firmwareLoop() {
   tickZone(zone2, tripped);
 
   // ---- feed conveyor (legacy M1 semantics): runs while the coil is set.
-  MOTOR_FEED.VelMax(velocityLimit());
-  MOTOR_FEED.AccelMax(accelLimit());
+  IN_BELT.VelMax(velocityLimit());
+  IN_BELT.AccelMax(accelLimit());
   if (!tripped && regs.coils[CMD_FEED_CONVEYOR]) {
-    MOTOR_FEED.MoveVelocity(velocityLimit());
+    IN_BELT.MoveVelocity(velocityLimit());
   } else {
-    MOTOR_FEED.MoveStopDecel();
+    IN_BELT.MoveStopDecel();
   }
 
   // ---- brush (legacy M2-role, now M3; legacy coil + tuned velocity).
   if (!tripped && regs.coils[CMD_BRUSH_ON]) {
-    MOTOR_BRUSH.MoveVelocity(BRUSH_VELOCITY_SPS);
+    O_BRUSH.MoveVelocity(BRUSH_VELOCITY_SPS);
   } else {
-    MOTOR_BRUSH.MoveStopDecel();
+    O_BRUSH.MoveStopDecel();
   }
 }

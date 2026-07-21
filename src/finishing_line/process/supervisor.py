@@ -9,7 +9,7 @@ TWO TRUTH RULES, both load-bearing:
 
 1. **Flash timers run on fan FEEDBACK, not fan belief.** Before stepping, the
    state's fan fields are overwritten from the ClearCore's sensed feedback —
-   so when the executor pauses the IF fan for a spray burst, the trail at IF
+   so when the executor pauses the F1 fan for a spray burst, the trail at F1
    banks nothing for exactly the seconds the fan was actually off. This is
    the fan-on-seconds-only rule made physical; trusting the commanded state
    would quietly under-flash the P3 trail every period.
@@ -37,22 +37,22 @@ from .robot import RobotDevice
 def build_sensors(cc: ClearCoreInputs, robot_clear: bool, gun_on: bool) -> SensorSnapshot:
     """Merge the conveyor side (ClearCore) and robot side into the core's view."""
     occupied = set()
-    if cc.if_present:
-        occupied.add(Station.IF)
-    if cc.s_present:
-        occupied.add(Station.S)
-    if cc.fd_present:
-        occupied.add(Station.FD)
+    if cc.f1_eye:
+        occupied.add(Station.F1)
+    if cc.o_eye:
+        occupied.add(Station.O)
+    if cc.f2_eye:
+        occupied.add(Station.F2)
     return SensorSnapshot(
         occupied=frozenset(occupied),
         shutter=cc.shutter,
-        if_fan=FanState.ON if cc.if_fan_on else FanState.OFF,
-        fd_fan=FanState.ON if cc.fd_fan_on else FanState.OFF,
+        f1_fan=FanState.ON if cc.f1_fan_on else FanState.OFF,
+        f2_fan=FanState.ON if cc.f2_fan_on else FanState.OFF,
         robot_clear=robot_clear,
         gun_on=gun_on,
-        inq_count=cc.inq_count,
-        inq_present=cc.inq_present,
-        out_present=cc.out_present,
+        in_count=cc.in_count,
+        in_eye=cc.in_eye,
+        out_eye=cc.out_eye,
     )
 
 
@@ -83,8 +83,8 @@ class Supervisor:
         # Rule 1: timers advance on sensed fan state, not commanded state.
         state = replace(
             self.state,
-            if_fan=sensors.if_fan,
-            fd_fan=sensors.fd_fan,
+            f1_fan=sensors.f1_fan,
+            f2_fan=sensors.f2_fan,
         )
 
         was_faulted = self.state.fault is not None
@@ -95,13 +95,13 @@ class Supervisor:
         self.executor.submit(result.intents)
 
         # §7 on fault entry: flashing parts keep drying. A fault landing inside
-        # the P3 spray bracket leaves the IF fan legitimately OFF over a wet
+        # the P3 spray bracket leaves the F1 fan legitimately OFF over a wet
         # part (the batch died between fan-off and fan-on) — so force fans ON
         # over every occupied fan station. Over-flash is safe by design; a
         # stalled fan over wet finish is not. Direct device call, bypassing the
         # (poisoned) executor.
         if result.state.fault is not None and not was_faulted:
-            for station in (Station.IF, Station.FD):
+            for station in (Station.F1, Station.F2):
                 if station in sensors.occupied:
                     self.cc.set_fan(station, True)
 
@@ -123,8 +123,8 @@ class Supervisor:
         cc_inputs = self.cc.read_inputs()
         state = replace(
             self.state,
-            if_fan=FanState.ON if cc_inputs.if_fan_on else FanState.OFF,
-            fd_fan=FanState.ON if cc_inputs.fd_fan_on else FanState.OFF,
+            f1_fan=FanState.ON if cc_inputs.f1_fan_on else FanState.OFF,
+            f2_fan=FanState.ON if cc_inputs.f2_fan_on else FanState.OFF,
         )
         self.state = replace(state, parts=advance_flash_timers(state, dt, self.cfg))
         self.cc.heartbeat()

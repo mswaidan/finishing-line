@@ -53,7 +53,7 @@ def rig():
 
     def declare_and_feed(product, part_ids):
         staged = orig(product, part_ids)
-        physics.inq_count += len(staged)
+        physics.in_count += len(staged)
         return staged
 
     controller.declare_batch = declare_and_feed
@@ -131,7 +131,7 @@ def test_pause_holds_schedule_but_timers_run(rig):
     # Wait until a part is flashing somewhere, then pause.
     def flashing():
         s = client.get("/state").json()
-        return any(p["coats"] >= 1 and p["station"] in ("IF", "FD")
+        return any(p["coats"] >= 1 and p["station"] in ("F1", "F2")
                    for p in s["parts"].values())
     assert _await(flashing, timeout=60.0), "no part reached a fan"
 
@@ -152,7 +152,7 @@ def test_pause_holds_schedule_but_timers_run(rig):
         (after["parts"][pid]["flash_1_s"] + after["parts"][pid]["flash_2_s"])
         - (p["flash_1_s"] + p["flash_2_s"])
         for pid, p in before["parts"].items()
-        if pid in after["parts"] and after["parts"][pid]["station"] in ("IF", "FD")
+        if pid in after["parts"] and after["parts"][pid]["station"] in ("F1", "F2")
     ]
     assert flashed, "expected a part at a fan station at the hold point"
     assert any(d > 0.3 for d in flashed), "flash timers must keep banking while paused"
@@ -165,7 +165,7 @@ def test_halt_then_ack_resumes(rig):
 
     def working():
         return client.get("/state").json()["parts"] and any(
-            p["station"] in ("S", "IF", "FD")
+            p["station"] in ("O", "F1", "F2")
             for p in client.get("/state").json()["parts"].values()
         )
     assert _await(working, timeout=60.0)

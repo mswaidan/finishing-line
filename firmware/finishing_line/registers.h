@@ -29,7 +29,7 @@ enum CommandReg : uint16_t {
   CMD_DISTANCE = 104,
   CMD_POSITION = 105,
   CMD_REQUEST_ID = 106,
-  CMD_FEED_CONVEYOR = 107,  // coil — ACTIVELY USED: the INQ queue belt
+  CMD_FEED_CONVEYOR = 107,  // coil — ACTIVELY USED: the IN queue belt
   CMD_BRUSH_ON = 108,       // coil
 };
 
@@ -48,39 +48,39 @@ enum EchoReg : uint16_t {
 
 // Rewrite block — see registers.py class New for full semantics.
 enum NewReg : uint16_t {
-  REG_SHUTTER_CMD = 300,       // 0 closed, 1 open
-  REG_IF_FAN_CMD = 301,
-  REG_FD_FAN_CMD = 302,
+  REG_SH_CMD = 300,       // 0 closed, 1 open
+  REG_F1_FAN = 301,
+  REG_F2_FAN = 302,
 
-  REG_ZONE1_MOTION_MODE = 310,
-  REG_ZONE1_DISTANCE = 311,
-  REG_ZONE1_REQUEST_ID = 312,
-  REG_ZONE1_DIRECTION = 313,   // coil: 1 = downstream
-  REG_ZONE1_TARGET = 314,      // SensorTarget encoding, MODE_SENSOR_STOP
-  REG_ZONE2_MOTION_MODE = 320,
-  REG_ZONE2_DISTANCE = 321,
-  REG_ZONE2_REQUEST_ID = 322,
-  REG_ZONE2_DIRECTION = 323,   // coil
-  REG_ZONE2_TARGET = 324,
+  REG_Z1_MODE = 310,
+  REG_Z1_DIST = 311,
+  REG_Z1_REQID = 312,
+  REG_Z1_DIR = 313,   // coil: 1 = downstream
+  REG_Z1_TARGET = 314,      // SensorTarget encoding, MODE_SENSOR_STOP
+  REG_Z2_MODE = 320,
+  REG_Z2_DIST = 321,
+  REG_Z2_REQID = 322,
+  REG_Z2_DIR = 323,   // coil
+  REG_Z2_TARGET = 324,
 
   REG_HEARTBEAT = 330,         // watchdog arms on FIRST change, never disarms
 
-  REG_SHUTTER_FEEDBACK = 400,  // 0 closed, 1 open, 2 moving/unknown (SENSED)
-  REG_IF_FAN_FEEDBACK = 401,
-  REG_FD_FAN_FEEDBACK = 402,
-  REG_IF_PRESENT = 403,        // discrete
-  REG_S_PRESENT = 404,         // discrete
-  REG_FD_PRESENT = 405,        // discrete
-  REG_INQ_COUNT = 406,         // no count sensor; see INQ_PRESENT (409)
-  REG_HANDOFF_TO_Z2 = 407,     // discrete
-  REG_HANDOFF_TO_Z1 = 408,     // discrete
-  REG_INQ_PRESENT = 409,       // discrete: queue-head eye
-  REG_ZONE1_STATE = 410,       // 0 not ready, 1 ready, 2 moving
-  REG_ZONE2_STATE = 411,
+  REG_SH_FB = 400,  // 0 closed, 1 open, 2 moving/unknown (SENSED)
+  REG_F1_FAN_FB = 401,
+  REG_F2_FAN_FB = 402,
+  REG_F1_EYE = 403,        // discrete
+  REG_O_EYE = 404,         // discrete
+  REG_F2_EYE = 405,        // discrete
+  REG_IN_COUNT = 406,         // no count sensor; see IN_EYE (409)
+  REG_Z2_EYE = 407,     // discrete
+  REG_Z1_EYE = 408,     // discrete
+  REG_IN_EYE = 409,       // discrete: queue-head eye
+  REG_Z1_STATE = 410,       // 0 not ready, 1 ready, 2 moving
+  REG_Z2_STATE = 411,
   REG_WATCHDOG_TRIPPED = 412,
-  REG_ZONE1_REQID_ACK = 413,   // last RECOGNISED request id (the move is running)
-  REG_ZONE2_REQID_ACK = 414,
-  REG_OUT_PRESENT = 415,       // discrete: outfeed occupancy eye
+  REG_Z1_ACK = 413,   // last RECOGNISED request id (the move is running)
+  REG_Z2_ACK = 414,
+  REG_OUT_EYE = 415,       // discrete: outfeed occupancy eye
 };
 
 // Zone motion modes (legacy vocabulary + sensor-stop).
@@ -96,11 +96,11 @@ enum MotionMode : uint16_t {
 // EDGES, not levels: firmware records the level at arm time and stops on the
 // first TRANSITION to the target polarity (see fake_clearcore.py).
 enum SensorTargetCode : uint16_t {
-  TARGET_IF_PRESENT = 1,
-  TARGET_S_PRESENT = 2,
-  TARGET_FD_PRESENT = 3,
-  TARGET_HANDOFF_TO_Z1 = 4,
-  TARGET_HANDOFF_TO_Z2 = 5,
+  TARGET_F1_EYE = 1,
+  TARGET_O_EYE = 2,
+  TARGET_F2_EYE = 3,
+  TARGET_Z1_EYE = 4,
+  TARGET_Z2_EYE = 5,
   TARGET_FALLING_FLAG = 8,
 };
 

@@ -45,13 +45,13 @@ class FakeLine:
     cfg: ProcessConfig
     occupied: set[Station] = field(default_factory=set)
     shutter: ShutterState = ShutterState.CLOSED
-    if_fan: FanState = FanState.OFF
-    fd_fan: FanState = FanState.OFF
+    f1_fan: FanState = FanState.OFF
+    f2_fan: FanState = FanState.OFF
     robot_clear: bool = True
     gun_on: bool = False
 
     #: FIFO. Intents run ONE AT A TIME, in submission order — the executor
-    #: contract. Running a batch concurrently would let the IF fan pause and
+    #: contract. Running a batch concurrently would let the F1 fan pause and
     #: resume in the same instant as the spray it is meant to bracket, hiding
     #: the P3 stretch entirely.
     queue: list[Intent] = field(default_factory=list)
@@ -128,27 +128,27 @@ class FakeLine:
             case SetShutter(target=target):
                 self.shutter = target
             case SetFan(station=station, state=state):
-                if station is Station.IF:
-                    self.if_fan = state
+                if station is Station.F1:
+                    self.f1_fan = state
                 else:
-                    self.fd_fan = state
+                    self.f2_fan = state
             case AdvanceTrain(moves=moves):
                 for src, dst in moves:
                     self.occupied.discard(src)
                     if dst is not Station.OUT:
                         self.occupied.add(dst)
 
-    def sensors(self, inq_count: int) -> SensorSnapshot:
+    def sensors(self, in_count: int) -> SensorSnapshot:
         return SensorSnapshot(
             occupied=frozenset(self.occupied),
             shutter=self.shutter,
-            if_fan=self.if_fan,
-            fd_fan=self.fd_fan,
+            f1_fan=self.f1_fan,
+            f2_fan=self.f2_fan,
             robot_clear=self.robot_clear,
             gun_on=self.gun_on,
-            inq_count=inq_count,
-            inq_present=inq_count > 0,
-            out_present=False,  # FakeLine models an always-cleared outfeed
+            in_count=in_count,
+            in_eye=in_count > 0,
+            out_eye=False,  # FakeLine models an always-cleared outfeed
         )
 
 
@@ -172,8 +172,8 @@ def run(
 ) -> SimResult:
     """Run until `until_outfeed` parts have left, or `max_seconds` elapses.
 
-    The IF-fan pause is modelled here rather than in the core: while the gun is
-    live, the fan is forced off, so a part at IF banks nothing. That is exactly
+    The F1-fan pause is modelled here rather than in the core: while the gun is
+    live, the fan is forced off, so a part at F1 banks nothing. That is exactly
     the P3 stretch, and the simulator is where its throughput cost becomes
     visible.
     """
@@ -187,10 +187,10 @@ def run(
         completed = line.advance(dt)
 
         # §7 backstop: pause the upstream fan while the gun is live.
-        effective_if_fan = FanState.OFF if line.gun_on else line.if_fan
-        sim_state = replace(state, if_fan=effective_if_fan, fd_fan=line.fd_fan)
+        effective_if_fan = FanState.OFF if line.gun_on else line.f1_fan
+        sim_state = replace(state, f1_fan=effective_if_fan, f2_fan=line.f2_fan)
 
-        result = step(sim_state, Inputs(dt=dt, sensors=line.sensors(len(state.inq_queue)),
+        result = step(sim_state, Inputs(dt=dt, sensors=line.sensors(len(state.in_queue)),
                                         completed=completed), cfg)
         state = result.state
         line.submit(result.intents)

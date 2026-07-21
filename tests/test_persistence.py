@@ -29,12 +29,12 @@ def _sample_state() -> LineState:
     trail = make_part("T1", PartRole.TRAIL)
     return LineState(
         parts={"L1": lead, "T1": trail},
-        occupancy={Station.FD: "L1"},
-        inq_queue=("T1",),
+        occupancy={Station.F2: "L1"},
+        in_queue=("T1",),
         beat="P2",
         phase=str(Phase.AWAIT_GUARDS),
         pair_index=3,
-        fd_fan=FanState.ON,
+        f2_fan=FanState.ON,
     )
 
 
@@ -46,8 +46,8 @@ def test_round_trip_preserves_everything_that_matters():
     assert declared == 7
     assert restored.beat == "P2"
     assert restored.pair_index == 3
-    assert restored.occupancy == {Station.FD: "L1"}
-    assert restored.inq_queue == ("T1",)
+    assert restored.occupancy == {Station.F2: "L1"}
+    assert restored.in_queue == ("T1",)
     part = restored.parts["L1"]
     assert part.flash_1_s == 42.5
     assert part.coats_applied == 1 and part.is_wet
@@ -69,7 +69,7 @@ def test_restore_with_parts_is_a_fault_with_correct_reentry():
 def test_restore_of_faulted_snapshot_keeps_its_own_fault():
     state = _sample_state()
     faulted = LineState(
-        parts=state.parts, occupancy=state.occupancy, inq_queue=state.inq_queue,
+        parts=state.parts, occupancy=state.occupancy, in_queue=state.in_queue,
         beat="P2", phase=str(Phase.FAULTED), fault="gun clogged",
         fault_phase=str(Phase.ROBOT_WORK),
     )
@@ -153,7 +153,7 @@ def test_restart_mid_flash_and_finish_the_batch(tmp_path):
     # --- first life: declare, run, wait until a part is flashing, then die.
     cc1, ex1, sup1, ctl1 = build_stack()
     ctl1.declare_batch("cube", ["L1", "T1"])
-    physics.inq_count = 2
+    physics.in_count = 2
     ctl1.start()
     ctl1.set_running(True)
 

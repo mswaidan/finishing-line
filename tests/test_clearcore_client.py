@@ -48,23 +48,23 @@ def test_move_uses_the_tuned_mm_to_steps_conversion(fake, cc):
     the legacy conversion, floor and all. If this drifts, parts land in the
     wrong place while every unit test stays green.
     """
-    steps = cc.move_zone_mm(Zone.ZONE1, 362.0)
+    steps = cc.move_zone_mm(Zone.Z1, 362.0)
     kin = load_conveyor_kinematics()
     assert steps == kin.mm_to_steps(362.0) == 10858
-    assert fake.holding[New.ZONE1_DISTANCE] == 10858
-    cc.wait_zone_ready(Zone.ZONE1)
+    assert fake.holding[New.Z1_DIST] == 10858
+    cc.wait_zone_ready(Zone.Z1)
 
 
 def test_negative_distance_travels_on_the_direction_coil(fake, cc):
     """Registers are unsigned; sign is the coil. -100mm = coil False + abs steps."""
-    steps = cc.move_zone_mm(Zone.ZONE2, -100.0)
+    steps = cc.move_zone_mm(Zone.Z2, -100.0)
     assert steps > 0
-    assert fake.coils[New.ZONE2_DIRECTION] == 0
-    cc.wait_zone_ready(Zone.ZONE2)
+    assert fake.coils[New.Z2_DIR] == 0
+    cc.wait_zone_ready(Zone.Z2)
 
-    cc.move_zone_mm(Zone.ZONE2, 100.0)
-    assert fake.coils[New.ZONE2_DIRECTION] == 1
-    cc.wait_zone_ready(Zone.ZONE2)
+    cc.move_zone_mm(Zone.Z2, 100.0)
+    assert fake.coils[New.Z2_DIR] == 1
+    cc.wait_zone_ready(Zone.Z2)
 
 
 def test_move_lifecycle_ack_then_ready(fake, cc):
@@ -73,21 +73,21 @@ def test_move_lifecycle_ack_then_ready(fake, cc):
     can never mistake not-yet-started for done.
     """
     for _ in range(5):  # repeat: the race is timing-dependent by nature
-        cc.move_zone_mm(Zone.ZONE1, 50.0)
-        cc.wait_zone_ready(Zone.ZONE1, timeout_s=5.0)
-    assert fake.input_regs[New.ZONE1_STATE] == STATE_READY
+        cc.move_zone_mm(Zone.Z1, 50.0)
+        cc.wait_zone_ready(Zone.Z1, timeout_s=5.0)
+    assert fake.input_regs[New.Z1_STATE] == STATE_READY
 
 
 def test_continuous_and_idle_modes(fake, cc):
     """The handoff manoeuvre's modes: run until told to stop."""
-    cc.set_zone_continuous(Zone.ZONE1, downstream=True)
+    cc.set_zone_continuous(Zone.Z1, downstream=True)
     time.sleep(0.05)
-    assert fake.holding[New.ZONE1_MOTION_MODE] == 2
-    assert fake.coils[New.ZONE1_DIRECTION] == 1
+    assert fake.holding[New.Z1_MODE] == 2
+    assert fake.coils[New.Z1_DIR] == 1
 
-    cc.set_zone_idle(Zone.ZONE1)
+    cc.set_zone_idle(Zone.Z1)
     time.sleep(0.05)
-    assert fake.holding[New.ZONE1_MOTION_MODE] == MODE_IDLE
+    assert fake.holding[New.Z1_MODE] == MODE_IDLE
 
 
 def test_shutter_command_confirm_split(cc):
@@ -106,29 +106,29 @@ def test_shutter_command_confirm_split(cc):
 
 
 def test_fan_command_and_feedback(cc):
-    cc.set_fan(Station.IF, True)
+    cc.set_fan(Station.F1, True)
     time.sleep(0.05)
-    assert cc.fan_on(Station.IF) is True
-    cc.set_fan(Station.IF, False)
+    assert cc.fan_on(Station.F1) is True
+    cc.set_fan(Station.F1, False)
     time.sleep(0.05)
-    assert cc.fan_on(Station.IF) is False
+    assert cc.fan_on(Station.F1) is False
 
 
 def test_read_inputs_reflects_poked_sensors(fake, cc):
-    fake.set_input(New.S_PRESENT, 1)
-    fake.set_input(New.HANDOFF_TO_Z2, 1)
-    fake.set_input(New.INQ_COUNT, 3, table="input")
+    fake.set_input(New.O_EYE, 1)
+    fake.set_input(New.Z2_EYE, 1)
+    fake.set_input(New.IN_COUNT, 3, table="input")
     time.sleep(0.05)
 
     inputs = cc.read_inputs()
-    assert inputs.s_present is True
-    assert inputs.handoff_to_z2 is True
-    assert inputs.inq_count == 3
-    assert inputs.if_present is False
+    assert inputs.o_eye is True
+    assert inputs.z2_eye is True
+    assert inputs.in_count == 3
+    assert inputs.f1_eye is False
 
-    fake.set_input(New.S_PRESENT, 0)
-    fake.set_input(New.HANDOFF_TO_Z2, 0)
-    fake.set_input(New.INQ_COUNT, 0, table="input")
+    fake.set_input(New.O_EYE, 0)
+    fake.set_input(New.Z2_EYE, 0)
+    fake.set_input(New.IN_COUNT, 0, table="input")
 
 
 def test_heartbeat_keeps_watchdog_happy_and_silence_trips_it(cc):
@@ -144,7 +144,7 @@ def test_heartbeat_keeps_watchdog_happy_and_silence_trips_it(cc):
     while time.monotonic() < deadline and not cc.watchdog_tripped():
         time.sleep(0.05)
     assert cc.watchdog_tripped() is True, "silence must trip the watchdog"
-    assert cc.fan_on(Station.IF) and cc.fan_on(Station.FD), "fans must fail ON"
+    assert cc.fan_on(Station.F1) and cc.fan_on(Station.F2), "fans must fail ON"
 
     cc.heartbeat()
     deadline = time.monotonic() + 1.0

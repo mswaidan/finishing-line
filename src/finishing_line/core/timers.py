@@ -5,7 +5,7 @@ while the part is at a fan station AND that fan is running.**
 
 Wall-clock at a fan position is not flash time. This is the decision that makes
 the §6 guarantee ("parts may over-flash safely, never under-flash") literally
-true rather than approximately true, and it is why P3 stretches when the IF fan
+true rather than approximately true, and it is why P3 stretches when the F1 fan
 pauses for a spray burst. See the P3 note in schedule.py.
 """
 
@@ -19,13 +19,13 @@ def advance_flash_timers(state: LineState, dt: float, cfg: ProcessConfig) -> dic
     """Return `state.parts` with flash timers advanced by `dt` seconds.
 
     Only parts standing at a fan station whose fan is ON accumulate time. A part
-    at IF while the IF fan is paused mid-spray-burst banks nothing — that is the
+    at F1 while the F1 fan is paused mid-spray-burst banks nothing — that is the
     whole point.
 
     Wetness clears HERE, the moment the active flash completes — not when the
     part later moves. Wet means "coated and flash incomplete"; tying it to
     movement left fully-flashed parts tagged wet until the next transition,
-    which both misled the HMI and kept the §7 IF-fan pause armed for a part
+    which both misled the HMI and kept the §7 F1-fan pause armed for a part
     that was already dry.
     """
     from dataclasses import replace
@@ -37,7 +37,7 @@ def advance_flash_timers(state: LineState, dt: float, cfg: ProcessConfig) -> dic
         part = state.part_at(station)
         if part is None:
             continue
-        # An uncoated part at IF is STAGED, not flashing (§2: "IF doubles as a
+        # An uncoated part at F1 is STAGED, not flashing (§2: "F1 doubles as a
         # staging slot when the fan is off"). Banking time for it would let it
         # skip its real flash 1 later, having already 'served' 180 s dry.
         if part.coats_applied == 0:
@@ -67,7 +67,7 @@ def may_outfeed(part: PartState, cfg: ProcessConfig) -> bool:
 def may_leave_fan(part: PartState, cfg: ProcessConfig) -> bool:
     """§6 guard: a part may leave a fan position only once its active flash is done.
 
-    An uncoated part is merely staged and is free to move — IF is a staging slot
+    An uncoated part is merely staged and is free to move — F1 is a staging slot
     as well as a flash position (§2), and only a part carrying wet finish owes
     the fan any time.
 

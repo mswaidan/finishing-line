@@ -27,18 +27,18 @@ to do and when.
 A cube visits stations in a line. Reading left to right:
 
 ```
- INQ  ->  IF  ->  S  ->  FD  ->  OUT
+ IN  ->  F1  ->  O  ->  F2  ->  OUT
 queue    fan 1   robot   fan 2   done
 ```
 
-1. **INQ** — the waiting line. Cubes sit here until it's their turn.
-2. **IF** — a resting spot with a fan overhead (fan #1).
-3. **S** — the work station. The robot sands the cube, then sprays coat #1.
-4. **FD** — the drying spot (fan #2). The cube sits here while the wet
+1. **IN** — the waiting line. Cubes sit here until it's their turn.
+2. **F1** — a resting spot with a fan overhead (fan #1).
+3. **O** — the work station. The robot sands the cube, then sprays coat #1.
+4. **F2** — the drying spot (fan #2). The cube sits here while the wet
    lacquer dries. This takes about 3 minutes.
-5. Back to **S** — the robot lightly smooths the dried coat and sprays
+5. Back to **O** — the robot lightly smooths the dried coat and sprays
    coat #2.
-6. Back to **FD** — dry again.
+6. Back to **F2** — dry again.
 7. **OUT** — finished! The cube leaves the line.
 
 Drying is the slow part. The robot needs about a minute per visit, but each
@@ -52,8 +52,8 @@ turns. While one cube is drying under a fan, the robot works on the other.
 They take turns in a repeating 4-step pattern (we call each step a **beat**,
 like a drumbeat):
 
-- One cube (the **lead**) always dries at the *downstream* fan (FD).
-- Its partner (the **trail**) retreats *backwards* to the upstream fan (IF)
+- One cube (the **lead**) always dries at the *downstream* fan (F2).
+- Its partner (the **trail**) retreats *backwards* to the upstream fan (F1)
   for its first dry — that's why fan #1 exists.
 
 Because of this leapfrogging, the robot is almost never idle, cubes never

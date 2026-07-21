@@ -11,6 +11,9 @@ __pycache__/
 # Runtime state snapshots (persistence)
 var/
 
+# PlatformIO firmware build output
+.pio/
+
 # Legacy Polyscope program library: a bulk NAS copy, not project source.
 # Tracked exceptions: the two archaeology sources that cell-config.yaml's
 # line references (script:NNN) resolve against, and the usbdisk salvage

@@ -22,7 +22,7 @@ from typing import Protocol
 
 class RobotDevice(Protocol):
     def sand(self, part_id: str) -> None:
-        """Sand the face of the part at S. Blocks until done, tool stopped."""
+        """Sand the face of the part at O. Blocks until done, tool stopped."""
         ...
 
     def denib(self, part_id: str) -> None:

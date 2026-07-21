@@ -74,61 +74,61 @@ def test_zone_distance_move_lifecycle(client):
     per zone.
     """
     client.write_register(Command.VELOCITY, 10_000)
-    client.write_register(New.ZONE1_DISTANCE, 2_000)          # 0.2 s at 10k steps/s
-    client.write_register(New.ZONE1_MOTION_MODE, MODE_DISTANCE)
+    client.write_register(New.Z1_DIST, 2_000)          # 0.2 s at 10k steps/s
+    client.write_register(New.Z1_MODE, MODE_DISTANCE)
 
     # Writing mode + distance alone must NOT start a move.
     time.sleep(0.1)
-    assert client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_READY
+    assert client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_READY
 
-    client.write_register(New.ZONE1_REQUEST_ID, 41)
+    client.write_register(New.Z1_REQID, 41)
     assert _await(
-        lambda: client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_MOVING
+        lambda: client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_MOVING
     ), "move never started after REQUEST_ID changed"
     assert _await(
-        lambda: client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_READY
+        lambda: client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_READY
     ), "move never completed"
 
     # Same id again: no new move.
-    client.write_register(New.ZONE1_REQUEST_ID, 41)
+    client.write_register(New.Z1_REQID, 41)
     time.sleep(0.1)
-    assert client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_READY
+    assert client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_READY
 
-    client.write_register(New.ZONE1_MOTION_MODE, MODE_IDLE)
+    client.write_register(New.Z1_MODE, MODE_IDLE)
 
 
 def test_zones_are_independent(client):
-    """Zone 2 idles while zone 1 moves — two motors, two blocks."""
+    """Z2 idles while Z1 moves — two motors, two blocks."""
     client.write_register(Command.VELOCITY, 5_000)
-    client.write_register(New.ZONE1_DISTANCE, 1_500)
-    client.write_register(New.ZONE1_MOTION_MODE, MODE_DISTANCE)
-    client.write_register(New.ZONE1_REQUEST_ID, 7)
+    client.write_register(New.Z1_DIST, 1_500)
+    client.write_register(New.Z1_MODE, MODE_DISTANCE)
+    client.write_register(New.Z1_REQID, 7)
 
     assert _await(
-        lambda: client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_MOVING
+        lambda: client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_MOVING
     )
-    assert client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_READY
+    assert client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_READY
     assert _await(
-        lambda: client.read_input_registers(New.ZONE1_STATE, count=1).registers[0] == STATE_READY
+        lambda: client.read_input_registers(New.Z1_STATE, count=1).registers[0] == STATE_READY
     )
-    client.write_register(New.ZONE1_MOTION_MODE, MODE_IDLE)
+    client.write_register(New.Z1_MODE, MODE_IDLE)
 
 
 def test_shutter_feedback_lags_command_through_moving(client):
     """Feedback is sensed position, not an echo: it passes through MOVING (2)
     during actuation. Zone motion gates on feedback, so the lag is load-bearing.
     """
-    client.write_register(New.SHUTTER_CMD, 1)
+    client.write_register(New.SH_CMD, 1)
     assert _await(
-        lambda: client.read_input_registers(New.SHUTTER_FEEDBACK, count=1).registers[0] == 2
+        lambda: client.read_input_registers(New.SH_FB, count=1).registers[0] == 2
     ), "shutter never reported MOVING"
     assert _await(
-        lambda: client.read_input_registers(New.SHUTTER_FEEDBACK, count=1).registers[0] == 1
+        lambda: client.read_input_registers(New.SH_FB, count=1).registers[0] == 1
     ), "shutter never confirmed OPEN"
 
-    client.write_register(New.SHUTTER_CMD, 0)
+    client.write_register(New.SH_CMD, 0)
     assert _await(
-        lambda: client.read_input_registers(New.SHUTTER_FEEDBACK, count=1).registers[0] == 0
+        lambda: client.read_input_registers(New.SH_FB, count=1).registers[0] == 0
     )
 
 
@@ -136,8 +136,8 @@ def test_watchdog_forces_fans_on_and_recovers(client):
     """The §7 fail-ON contract: a silent orchestrator halts zones and forces
     both fans ON, so parts mid-flash keep drying. Heartbeat resuming clears it.
     """
-    client.write_register(New.IF_FAN_CMD, 0)
-    client.write_register(New.FD_FAN_CMD, 0)
+    client.write_register(New.F1_FAN, 0)
+    client.write_register(New.F2_FAN, 0)
     client.write_register(New.HEARTBEAT, 1)
     assert _await(
         lambda: client.read_input_registers(New.WATCHDOG_TRIPPED, count=1).registers[0] == 0
@@ -149,8 +149,8 @@ def test_watchdog_forces_fans_on_and_recovers(client):
         timeout=2.0,
     ), "watchdog never tripped"
     fans = [
-        client.read_input_registers(New.IF_FAN_FEEDBACK, count=1).registers[0],
-        client.read_input_registers(New.FD_FAN_FEEDBACK, count=1).registers[0],
+        client.read_input_registers(New.F1_FAN_FB, count=1).registers[0],
+        client.read_input_registers(New.F2_FAN_FB, count=1).registers[0],
     ]
     assert fans == [1, 1], "fans must fail ON while tripped"
 
@@ -160,7 +160,7 @@ def test_watchdog_forces_fans_on_and_recovers(client):
         lambda: client.read_input_registers(New.WATCHDOG_TRIPPED, count=1).registers[0] == 0
     ), "watchdog never recovered"
     assert _await(
-        lambda: client.read_input_registers(New.IF_FAN_FEEDBACK, count=1).registers[0] == 0
+        lambda: client.read_input_registers(New.F1_FAN_FB, count=1).registers[0] == 0
     )
 
 
@@ -168,13 +168,13 @@ def test_presence_and_handoff_sensors_are_inputs(fake, client):
     """Sensors are physics, not controller state: the fake only reports what
     the harness pokes. This is the seam the Stage B harness drives.
     """
-    fake.set_input(New.S_PRESENT, 1)
-    fake.set_input(New.HANDOFF_TO_Z2, 1)
-    assert _await(lambda: client.read_discrete_inputs(New.S_PRESENT, count=1).bits[0] is True)
-    assert _await(lambda: client.read_discrete_inputs(New.HANDOFF_TO_Z2, count=1).bits[0] is True)
-    fake.set_input(New.S_PRESENT, 0)
-    fake.set_input(New.HANDOFF_TO_Z2, 0)
-    assert _await(lambda: client.read_discrete_inputs(New.S_PRESENT, count=1).bits[0] is False)
+    fake.set_input(New.O_EYE, 1)
+    fake.set_input(New.Z2_EYE, 1)
+    assert _await(lambda: client.read_discrete_inputs(New.O_EYE, count=1).bits[0] is True)
+    assert _await(lambda: client.read_discrete_inputs(New.Z2_EYE, count=1).bits[0] is True)
+    fake.set_input(New.O_EYE, 0)
+    fake.set_input(New.Z2_EYE, 0)
+    assert _await(lambda: client.read_discrete_inputs(New.O_EYE, count=1).bits[0] is False)
 
 
 def test_legacy_status_block_is_readable(client):
@@ -208,34 +208,34 @@ def test_sensor_stop_is_edge_triggered_not_level(edge_rig):
     from finishing_line.devices.registers import MODE_SENSOR_STOP, SensorTarget
 
     # FD is already occupied when the move is armed.
-    fake.set_input(New.FD_PRESENT, 1)
+    fake.set_input(New.F2_EYE, 1)
     time.sleep(0.05)
 
-    client.write_register(New.ZONE2_TARGET, int(SensorTarget.FD_PRESENT))  # rising
-    client.write_register(New.ZONE2_MOTION_MODE, MODE_SENSOR_STOP)
-    client.write_register(New.ZONE2_REQUEST_ID, 77)
+    client.write_register(New.Z2_TARGET, int(SensorTarget.F2_EYE))  # rising
+    client.write_register(New.Z2_MODE, MODE_SENSOR_STOP)
+    client.write_register(New.Z2_REQID, 77)
 
     assert _await(
-        lambda: client.read_input_registers(New.ZONE2_REQID_ACK, count=1).registers[0] == 77
+        lambda: client.read_input_registers(New.Z2_ACK, count=1).registers[0] == 77
     ), "move never acked"
     time.sleep(0.15)
     assert (
-        client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+        client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_MOVING
     ), "level-already-high must not satisfy a rising-edge stop"
 
     # Departing part clears FD (falling edge — not our target)...
-    fake.set_input(New.FD_PRESENT, 0)
+    fake.set_input(New.F2_EYE, 0)
     time.sleep(0.15)
-    assert client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+    assert client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_MOVING
 
     # ...and the arriving part gives the rising edge that stops the belt.
-    fake.set_input(New.FD_PRESENT, 1)
+    fake.set_input(New.F2_EYE, 1)
     assert _await(
-        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_READY
+        lambda: client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_READY
     ), "rising edge never stopped the zone"
 
-    client.write_register(New.ZONE2_MOTION_MODE, REG_MODE_IDLE)
-    fake.set_input(New.FD_PRESENT, 0)
+    client.write_register(New.Z2_MODE, REG_MODE_IDLE)
+    fake.set_input(New.F2_EYE, 0)
 
 
 def test_sensor_stop_falling_edge(edge_rig):
@@ -244,22 +244,22 @@ def test_sensor_stop_falling_edge(edge_rig):
     from finishing_line.devices.registers import MODE_IDLE as REG_MODE_IDLE
     from finishing_line.devices.registers import MODE_SENSOR_STOP, SensorTarget
 
-    fake.set_input(New.FD_PRESENT, 1)
+    fake.set_input(New.F2_EYE, 1)
     time.sleep(0.05)
     client.write_register(
-        New.ZONE2_TARGET, int(SensorTarget.FD_PRESENT) | int(SensorTarget.FALLING)
+        New.Z2_TARGET, int(SensorTarget.F2_EYE) | int(SensorTarget.FALLING)
     )
-    client.write_register(New.ZONE2_MOTION_MODE, MODE_SENSOR_STOP)
-    client.write_register(New.ZONE2_REQUEST_ID, 78)
+    client.write_register(New.Z2_MODE, MODE_SENSOR_STOP)
+    client.write_register(New.Z2_REQID, 78)
     assert _await(
-        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_MOVING
+        lambda: client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_MOVING
     )
 
-    fake.set_input(New.FD_PRESENT, 0)
+    fake.set_input(New.F2_EYE, 0)
     assert _await(
-        lambda: client.read_input_registers(New.ZONE2_STATE, count=1).registers[0] == STATE_READY
+        lambda: client.read_input_registers(New.Z2_STATE, count=1).registers[0] == STATE_READY
     ), "falling edge never stopped the zone"
-    client.write_register(New.ZONE2_MOTION_MODE, REG_MODE_IDLE)
+    client.write_register(New.Z2_MODE, REG_MODE_IDLE)
 
 
 def test_port_collision_fails_loudly(fake):

@@ -151,13 +151,13 @@ class LineController:
             return True, None
 
     def declare_batch(self, product: str, part_ids: list[str]) -> list[str]:
-        """Append operator-declared parts to the logical INQ queue."""
+        """Append operator-declared parts to the logical IN queue."""
         prod = Product(product)
         with self._lock:
             state = self._sup.state
             new_parts = {}
             for pid in part_ids:
-                if pid in state.parts or pid in state.inq_queue:
+                if pid in state.parts or pid in state.in_queue:
                     raise ValueError(f"part id {pid!r} already exists")
                 role = PartRole.LEAD if self._declared % 2 == 0 else PartRole.TRAIL
                 new_parts[pid] = PartState(
@@ -167,7 +167,7 @@ class LineController:
             self._sup.state = replace(
                 state,
                 parts={**state.parts, **new_parts},
-                inq_queue=state.inq_queue + tuple(part_ids),
+                in_queue=state.in_queue + tuple(part_ids),
             )
         return part_ids
 
@@ -186,11 +186,11 @@ class LineController:
                 cc = self._sup.cc.read_inputs()
                 cc_view = {
                     "shutter": cc.shutter.name,
-                    "fans": {"IF": cc.if_fan_on, "FD": cc.fd_fan_on},
+                    "fans": {"F1": cc.f1_fan_on, "F2": cc.f2_fan_on},
                     "sensors": {
-                        "IF": cc.if_present, "S": cc.s_present, "FD": cc.fd_present,
-                        "INQ": cc.inq_present, "OUT": cc.out_present,
-                        "inq_count": cc.inq_count,
+                        "F1": cc.f1_eye, "O": cc.o_eye, "F2": cc.f2_eye,
+                        "IN": cc.in_eye, "OUT": cc.out_eye,
+                        "in_count": cc.in_count,
                     },
                     "watchdog_tripped": cc.watchdog_tripped,
                 }
@@ -205,10 +205,10 @@ class LineController:
             "fault": state.fault,
             "blocked_by": state.fault or blocked,
             "occupancy": {st.name: pid for st, pid in state.occupancy.items()},
-            "inq_queue": list(state.inq_queue),
+            "in_queue": list(state.in_queue),
             "parts": {
                 pid: {
-                    "station": station_of.get(pid, "INQ" if pid in state.inq_queue else None),
+                    "station": station_of.get(pid, "IN" if pid in state.in_queue else None),
                     "product": str(p.product),
                     "role": str(p.role),
                     "pair": p.pair_index,

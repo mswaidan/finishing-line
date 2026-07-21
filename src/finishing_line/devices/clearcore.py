@@ -66,20 +66,20 @@ class _ZoneRegs:
 
 
 _ZONES: dict[Zone, _ZoneRegs] = {
-    Zone.ZONE1: _ZoneRegs(
-        New.ZONE1_MOTION_MODE, New.ZONE1_DISTANCE, New.ZONE1_REQUEST_ID,
-        New.ZONE1_DIRECTION, New.ZONE1_STATE, New.ZONE1_REQID_ACK,
-        New.ZONE1_TARGET,
+    Zone.Z1: _ZoneRegs(
+        New.Z1_MODE, New.Z1_DIST, New.Z1_REQID,
+        New.Z1_DIR, New.Z1_STATE, New.Z1_ACK,
+        New.Z1_TARGET,
     ),
-    Zone.ZONE2: _ZoneRegs(
-        New.ZONE2_MOTION_MODE, New.ZONE2_DISTANCE, New.ZONE2_REQUEST_ID,
-        New.ZONE2_DIRECTION, New.ZONE2_STATE, New.ZONE2_REQID_ACK,
-        New.ZONE2_TARGET,
+    Zone.Z2: _ZoneRegs(
+        New.Z2_MODE, New.Z2_DIST, New.Z2_REQID,
+        New.Z2_DIR, New.Z2_STATE, New.Z2_ACK,
+        New.Z2_TARGET,
     ),
 }
 
-_FAN_CMD = {Station.IF: New.IF_FAN_CMD, Station.FD: New.FD_FAN_CMD}
-_FAN_FEEDBACK = {Station.IF: New.IF_FAN_FEEDBACK, Station.FD: New.FD_FAN_FEEDBACK}
+_FAN_CMD = {Station.F1: New.F1_FAN, Station.F2: New.F2_FAN}
+_FAN_FEEDBACK = {Station.F1: New.F1_FAN_FB, Station.F2: New.F2_FAN_FB}
 
 _STATE_READY = 1
 
@@ -94,17 +94,17 @@ class ClearCoreInputs:
     driver, and the supervisor merges both into the core's SensorSnapshot.
     """
 
-    if_present: bool
-    s_present: bool
-    fd_present: bool
-    handoff_to_z1: bool
-    handoff_to_z2: bool
-    inq_present: bool
-    out_present: bool
-    inq_count: int
+    f1_eye: bool
+    o_eye: bool
+    f2_eye: bool
+    z1_eye: bool
+    z2_eye: bool
+    in_eye: bool
+    out_eye: bool
+    in_count: int
     shutter: ShutterState
-    if_fan_on: bool
-    fd_fan_on: bool
+    f1_fan_on: bool
+    f2_fan_on: bool
     watchdog_tripped: bool
 
 
@@ -251,10 +251,10 @@ class ClearCoreClient:
         self._write_register(_FAN_CMD[station], 1 if on else 0)
 
     def set_feed_conveyor(self, on: bool) -> None:
-        """The INQ queue's own belt (legacy M1, coil 107 — vocabulary reused).
+        """The IN queue's own belt (legacy M1, coil 107 — vocabulary reused).
 
-        The queue advances ONLY while this runs; zone 1 alone never pulls from
-        it. TrainMover raises it for INQ->IF moves and drops it after.
+        The queue advances ONLY while this runs; Z1 alone never pulls from
+        it. TrainMover raises it for IN->F1 moves and drops it after.
         """
         self._write_coil(Command.FEED_CONVEYOR, on)
 
@@ -268,10 +268,10 @@ class ClearCoreClient:
         """
         if target not in (ShutterState.OPEN, ShutterState.CLOSED):
             raise ValueError(f"cannot command shutter to {target}")
-        self._write_register(New.SHUTTER_CMD, 1 if target is ShutterState.OPEN else 0)
+        self._write_register(New.SH_CMD, 1 if target is ShutterState.OPEN else 0)
 
     def shutter_state(self) -> ShutterState:
-        raw = self._read_register(New.SHUTTER_FEEDBACK)
+        raw = self._read_register(New.SH_FB)
         return _SHUTTER_FROM_FEEDBACK.get(raw, ShutterState.UNKNOWN)
 
     def wait_shutter(self, target: ShutterState, timeout_s: float = 5.0) -> None:
@@ -286,29 +286,29 @@ class ClearCoreClient:
     def presence(self, station: Station) -> bool:
         """Single presence sensor — one Modbus read, for fast polling loops."""
         regs = {
-            Station.IF: New.IF_PRESENT,
-            Station.S: New.S_PRESENT,
-            Station.FD: New.FD_PRESENT,
+            Station.F1: New.F1_EYE,
+            Station.O: New.O_EYE,
+            Station.F2: New.F2_EYE,
         }
         return self._read_discrete(regs[station])
 
     def handoff(self, *, downstream: bool) -> bool:
-        """The IF<->S crossing-confirmed sensor for the given direction."""
-        return self._read_discrete(New.HANDOFF_TO_Z2 if downstream else New.HANDOFF_TO_Z1)
+        """The F1<->O crossing-confirmed sensor for the given direction."""
+        return self._read_discrete(New.Z2_EYE if downstream else New.Z1_EYE)
 
     def read_inputs(self) -> ClearCoreInputs:
         return ClearCoreInputs(
-            if_present=self._read_discrete(New.IF_PRESENT),
-            s_present=self._read_discrete(New.S_PRESENT),
-            fd_present=self._read_discrete(New.FD_PRESENT),
-            handoff_to_z1=self._read_discrete(New.HANDOFF_TO_Z1),
-            handoff_to_z2=self._read_discrete(New.HANDOFF_TO_Z2),
-            inq_present=self._read_discrete(New.INQ_PRESENT),
-            out_present=self._read_discrete(New.OUT_PRESENT),
-            inq_count=self._read_register(New.INQ_COUNT),
+            f1_eye=self._read_discrete(New.F1_EYE),
+            o_eye=self._read_discrete(New.O_EYE),
+            f2_eye=self._read_discrete(New.F2_EYE),
+            z1_eye=self._read_discrete(New.Z1_EYE),
+            z2_eye=self._read_discrete(New.Z2_EYE),
+            in_eye=self._read_discrete(New.IN_EYE),
+            out_eye=self._read_discrete(New.OUT_EYE),
+            in_count=self._read_register(New.IN_COUNT),
             shutter=self.shutter_state(),
-            if_fan_on=self.fan_on(Station.IF),
-            fd_fan_on=self.fan_on(Station.FD),
+            f1_fan_on=self.fan_on(Station.F1),
+            f2_fan_on=self.fan_on(Station.F2),
             watchdog_tripped=bool(self._read_register(New.WATCHDOG_TRIPPED)),
         )
 

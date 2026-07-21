@@ -6,22 +6,22 @@ Rev 0 — 2026-07-16. Generalizes the hand-drawn 5-step table into a repeating s
 
 | ID | Station | Notes |
 |----|---------|-------|
-| INQ | Infeed queue | Existing infeed conveyor, holds up to 4 staged cubes |
-| IF | Infeed flash position | New upstream fan. Doubles as staging slot when fan is off |
-| S | Sand / spray station | UR5e work envelope. Pneumatic sander + HVLP gun |
-| FD | Downstream fan position | Existing fan |
+| IN | Infeed queue | Existing infeed conveyor, holds up to 4 staged cubes |
+| F1 | Infeed flash position | New upstream fan. Doubles as staging slot when fan is off |
+| O | Sand / spray station | UR5e work envelope. Pneumatic sander + HVLP gun |
+| F2 | Downstream fan position | Existing fan |
 | OUT | Outfeed | Offload at the fan end (existing) |
 
-**Zones:** Zone 1 spans IF ↔ S; Zone 2 spans S ↔ FD ↔ OUT. Both reversible via robot command.
+**Zones:** Z1 spans IN ↔ F1; Z2 spans O ↔ F2 ↔ OUT. The F1 ↔ O boundary belongs to neither zone — it is the handoff gap crossed by both belts together (§3). Both reversible via robot command.
 
-**Shutter:** The baffle panel sits in the plane between IF and S. The window is an actuated shutter (assumed pneumatic slide gate) with states OPEN / CLOSED and position feedback. *If the window is left as a fixed opening, treat the shutter column below as always-OPEN — contamination control then depends entirely on fan ducting and panel geometry.*
+**Shutter:** The baffle panel sits in the plane between F1 and O. The window is an actuated shutter (assumed pneumatic slide gate) with states OPEN / CLOSED and position feedback. *If the window is left as a fixed opening, treat the shutter column below as always-OPEN — contamination control then depends entirely on fan ducting and panel geometry.*
 
 ## 2. Part roles
 
 Parts run in **pairs**: a **lead (L)** and a **trail (T)**. Their paths differ only in where the first flash happens:
 
-- **Lead:** INQ → IF (stage) → S (coat 1) → FD (flash 1) → S (coat 2) → FD (flash 2) → OUT
-- **Trail:** INQ → IF (stage) → S (coat 1) → **IF (flash 1)** → S (coat 2) → FD (flash 2) → OUT
+- **Lead:** IN → F1 (stage) → O (coat 1) → F2 (flash 1) → O (coat 2) → F2 (flash 2) → OUT
+- **Trail:** IN → F1 (stage) → O (coat 1) → **F1 (flash 1)** → O (coat 2) → F2 (flash 2) → OUT
 
 The trail's retreat to the upstream fan is what keeps the spray station occupied every beat without any part ever passing another. Part order on the conveyor never changes.
 
@@ -29,7 +29,7 @@ The trail's retreat to the upstream fan is what keeps the spray station occupied
 
 Pair *n* = (Lₙ, Tₙ). Previous pair = (Lₙ₋₁, Tₙ₋₁). Next pair = (Lₙ₊₁, Tₙ₊₁).
 
-| Beat | S (robot action) | IF | FD | IF fan | FD fan | Shutter |
+| Beat | O (robot action) | F1 | F2 | F1 fan | F2 fan | Shutter |
 |------|------------------|----|----|--------|--------|---------|
 | **P1** | Lₙ — sand + coat 1 | Tₙ staged | Tₙ₋₁ flash 2 | OFF | ON | CLOSED |
 | **P2** | Tₙ — sand + coat 1 | empty | Lₙ flash 1 | OFF | ON | CLOSED |
@@ -40,10 +40,10 @@ Pair *n* = (Lₙ, Tₙ). Previous pair = (Lₙ₋₁, Tₙ₋₁). Next pair = (
 
 | Transition | Direction | Moves |
 |-----------|-----------|-------|
-| P1 → P2 | ALL DOWNSTREAM | Tₙ₋₁: FD→OUT · Lₙ: S→FD · Tₙ: IF→S |
-| P2 → P3 | ALL UPSTREAM | Lₙ: FD→S · Tₙ: S→IF |
-| P3 → P4 | ALL DOWNSTREAM | Lₙ: S→FD · Tₙ: IF→S · Lₙ₊₁: INQ→IF |
-| P4 → P1' | ALL DOWNSTREAM | Lₙ: FD→OUT · Tₙ: S→FD · Lₙ₊₁: IF→S · Tₙ₊₁: INQ→IF |
+| P1 → P2 | ALL DOWNSTREAM | Tₙ₋₁: F2→OUT · Lₙ: O→F2 · Tₙ: F1→O |
+| P2 → P3 | ALL UPSTREAM | Lₙ: F2→O · Tₙ: O→F1 |
+| P3 → P4 | ALL DOWNSTREAM | Lₙ: O→F2 · Tₙ: F1→O · Lₙ₊₁: IN→F1 |
+| P4 → P1' | ALL DOWNSTREAM | Lₙ: F2→OUT · Tₙ: O→F2 · Lₙ₊₁: F1→O · Tₙ₊₁: IN→F1 |
 
 Every transition moves the whole train one station in a single direction — no zone ever runs opposite to its neighbor while parts span the boundary. Outfeed events occur on P1→P2 (trail of previous pair) and P4→P1' (lead of current pair): 2 parts per period.
 
@@ -61,19 +61,19 @@ Every transition moves the whole train one station in a single direction — no 
 
 From an empty line, run the steady-state pattern with the "previous pair" slots empty:
 
-| Beat | S | IF | FD | Notes |
+| Beat | O | F1 | F2 | Notes |
 |------|---|----|----|----|
-| F0 | — | L₁ staged | — | L₁ loads INQ→IF |
-| F1 (=P1) | L₁ coat 1 | T₁ staged | — | FD fan OFF (unoccupied) |
-| F2 (=P2) | T₁ coat 1 | empty | L₁ flash 1 | Steady state from here |
+| Fill 0 | — | L₁ staged | — | L₁ loads IN→F1 |
+| Fill 1 (=P1) | L₁ coat 1 | T₁ staged | — | F2 fan OFF (unoccupied) |
+| Fill 2 (=P2) | T₁ coat 1 | empty | L₁ flash 1 | Steady state from here |
 
 No special-case logic needed — startup is the steady pattern with unoccupied slots and their fans off.
 
 ## 5. End-of-batch drain
 
-**Even part count:** after the final pair's P4, run two more transitions with S idle: P4→P1' (Lₙ out, Tₙ to FD, fan ON 180 s), then Tₙ → OUT. 
+**Even part count:** after the final pair's P4, run two more transitions with O idle: P4→P1' (Lₙ out, Tₙ to F2, fan ON 180 s), then Tₙ → OUT. 
 
-**Odd part count (lone lead, no trail):** the lone part runs the lead path with S idle on trail beats: coat 1 → FD flash 1 → coat 2 → FD flash 2 → OUT (5 beats). IF fan never runs.
+**Odd part count (lone lead, no trail):** the lone part runs the lead path with O idle on trail beats: coat 1 → F2 flash 1 → coat 2 → F2 flash 2 → OUT (5 beats). F1 fan never runs.
 
 ## 6. Timing and state validation
 
@@ -92,13 +92,13 @@ Beat counting alone will drift from truth on any fault or manual intervention; p
 
 **Zone motion permitted only when:** ROBOT_CLEAR set · gun off · shutter OPEN confirmed · destination slot empty (presence sensors).
 
-**Spray permitted only when:** shutter CLOSED confirmed · part present and located at S · IF fan paused if a wet part occupies IF.
+**Spray permitted only when:** shutter CLOSED confirmed · part present and located at O · F1 fan paused if a wet part occupies F1.
 
-**Sensor mismatch** (part expected/found disagreement at IF, S, or FD): halt zones, fans remain ON (keeps flashing parts drying), alarm. Recovery = occupancy scan → operator confirms part identities → resume from reconstructed state using per-part timers.
+**Sensor mismatch** (part expected/found disagreement at F1, O, or F2): halt zones, fans remain ON (keeps flashing parts drying), alarm. Recovery = occupancy scan → operator confirms part identities → resume from reconstructed state using per-part timers.
 
 **UR5e protective stop / E-stop:** zones halt immediately; fans hold state; shutter holds state. Flash timers keep counting (drying continues) — parts may over-flash safely, never under-flash.
 
-**Overspray/dust control notes:** IF fan ducted to blow toward the infeed end, away from the shutter plane. Kraft paper facing on the spray side of the panel, replaced weekly. Shutter closed during all sand and spray operations is the primary barrier; the fan pause during spray bursts is the backstop for the P3 beat, when a wet part sits at IF during a spray.
+**Overspray/dust control notes:** F1 fan ducted to blow toward the infeed end, away from the shutter plane. Kraft paper facing on the spray side of the panel, replaced weekly. Shutter closed during all sand and spray operations is the primary barrier; the fan pause during spray bursts is the backstop for the P3 beat, when a wet part sits at F1 during a spray.
 
 ## 8. Open items
 

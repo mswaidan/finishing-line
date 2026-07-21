@@ -15,9 +15,9 @@ Ground-up software rewrite of Simple Wood Goods' automated finishing line (Balti
 ## Hardware
 
 - **UR5e** — pneumatic sander + HVLP gun (water-based lacquer, 2 coats, 180 s flash each). Sand to 220; standard: evenly reflective, smooth to touch.
-- **Teknic ClearCore** — two reversible conveyor zones (Zone 1: IF↔S, Zone 2: S↔FD↔OUT), position/presence sensors, will also drive both fans + shutter. Firmware source: `modbustest.ino` in THIS repo is authoritative for the rewrite (a copy also exists in a separate personal GitHub repo — treat that one as historical); firmware changes are authored here, in lockstep with `devices/registers.py` and the fake ClearCore.
-- **Stations:** INQ (infeed queue, 4 parts) → IF (new upstream fan / staging) → S (sand+spray) → FD (downstream fan) → OUT (offload at fan end).
-- **New physical:** upstream fan at IF; rigid baffle panel between IF and S with actuated shutter window (likely pneumatic slide gate); kraft-paper sacrificial facing on spray side.
+- **Teknic ClearCore** — two reversible conveyor zones (Z1: IN↔F1, Z2: O↔F2↔OUT), position/presence sensors, will also drive both fans + shutter. Firmware source: `modbustest.ino` in THIS repo is authoritative for the rewrite (a copy also exists in a separate personal GitHub repo — treat that one as historical); firmware changes are authored here, in lockstep with `devices/registers.py` and the fake ClearCore.
+- **Stations:** IN (infeed queue, 4 parts) → F1 (new upstream fan / staging) → O (sand+spray) → F2 (downstream fan) → OUT (offload at fan end).
+- **New physical:** upstream fan at F1; rigid baffle panel between F1 and O with actuated shutter window (likely pneumatic slide gate); kraft-paper sacrificial facing on spray side.
 - Cell PC (currently browser-only) becomes the orchestrator host, **running Linux** (decided 2026-07-17 — `ur-rtde` has no Windows wheel; manylinux wheel deploys the identical stack developed under WSL2). HMI web app (JS) currently hosted on the NAS.
 
 ## Architecture (decided)
@@ -43,7 +43,7 @@ Python cell controller on the cell PC owns ALL orchestration; devices are dumb e
 
 - **The old Polyscope program must remain loadable as rollback.** Line produces 200/week during the transition; any morning must be able to run linear mode.
 - Validate per-part timers, never beat counts. Faults may over-flash a part, never under-flash.
-- Zone motion only when: robot clear, gun off, shutter open confirmed, destination empty. Spray only when: shutter closed, part located at S, IF fan paused if a wet part sits at IF.
+- Zone motion only when: robot clear, gun off, shutter open confirmed, destination empty. Spray only when: shutter closed, part located at O, F1 fan paused if a wet part sits at F1.
 - Timing budget assumes 15 s zone transfers — **measure on the real line** (open item). At 30 s the cycle is ~7 min/part, still above target.
 - Two products share the line: cube (rebated front edge) and browser (~40/wk). Verify browsers fit the same schedule or run in dedicated blocks.
 

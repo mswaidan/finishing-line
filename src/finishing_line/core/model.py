@@ -18,53 +18,53 @@ class Station(StrEnum):
     Ordered from upstream to downstream — `STATION_ORDER` below depends on it.
     """
 
-    INQ = auto()  # infeed queue, holds up to 4 staged parts
-    IF = auto()   # infeed flash position (new upstream fan)
-    S = auto()    # sand / spray station (UR5e envelope)
-    FD = auto()   # downstream flash position (existing fan)
+    IN = auto()   # infeed queue, holds up to 4 staged parts
+    F1 = auto()   # infeed flash station (upstream fan)
+    O = auto()    # sand / spray station (UR5e envelope)
+    F2 = auto()   # downstream flash station (existing fan)
     OUT = auto()  # offload
 
 
-STATION_ORDER: tuple[Station, ...] = (Station.INQ, Station.IF, Station.S, Station.FD, Station.OUT)
+STATION_ORDER: tuple[Station, ...] = (Station.IN, Station.F1, Station.O, Station.F2, Station.OUT)
 
 #: Stations that have a fan. A part only accumulates flash time at one of these.
-FAN_STATIONS: frozenset[Station] = frozenset({Station.IF, Station.FD})
+FAN_STATIONS: frozenset[Station] = frozenset({Station.F1, Station.F2})
 
 
 class Zone(StrEnum):
     """The two conveyor belts.
 
-        ZONE1  INQ <-> IF
-        ZONE2  S <-> FD <-> OUT
+        Z1  IN <-> F1
+        Z2  O <-> F2 <-> OUT
 
-    NOTE the gap: nothing spans IF <-> S. A part crosses that boundary by
+    NOTE the gap: nothing spans F1 <-> O. A part crosses that boundary by
     HANDOFF — both belts run together until a sensor confirms the part is on the
     receiving belt. §3's "no zone ever runs opposite to its neighbour while parts
     span the boundary" is about exactly this.
 
-    Every transition in the steady schedule crosses IF<->S, because S is
+    Every transition in the steady schedule crosses F1<->O, because O is
     occupied every beat by design. So the two belts always move together, in the
     same direction: they are one logical train with two motors and a baffle
     between them, not two independently schedulable zones.
 
     PITCH CONSTRAINT. One belt moves everything on it by one distance, and
     sensor-terminating a run measures that distance rather than decoupling it.
-    Since ZONE2 carries parts at both S and FD, and ZONE1 carries both the INQ
-    part and the part handing off to S, a single synchronised advance is only
+    Since Z2 carries parts at both O and F2, and Z1 carries both the IN
+    part and the part handing off to O, a single synchronised advance is only
     correct for every part if all four station gaps are equal:
 
-        INQ->IF == IF->S == S->FD == FD->OUT
+        IN->F1 == F1->O == O->F2 == F2->OUT
 
-    P2->P3 is the sharpest case: it retreats S->IF while bringing FD->S, and
-    both parts start on ZONE2. Whichever part terminates the run, the other only
-    lands correctly if IF->S == S->FD.
+    P2->P3 is the sharpest case: it retreats O->F1 while bringing F2->O, and
+    both parts start on Z2. Whichever part terminates the run, the other only
+    lands correctly if F1->O == O->F2.
 
     UNVERIFIED — see line-config.yaml stations.pitch_mm. If the gaps differ, the
     schedule tables need sequenced moves rather than one advance per transition.
     """
 
-    ZONE1 = auto()
-    ZONE2 = auto()
+    Z1 = auto()
+    Z2 = auto()
 
 
 class Product(StrEnum):
@@ -75,7 +75,7 @@ class Product(StrEnum):
 class PartRole(StrEnum):
     """Position within a pair. Determines where flash 1 happens.
 
-    LEAD flashes both coats at FD. TRAIL retreats upstream to IF for flash 1,
+    LEAD flashes both coats at F2. TRAIL retreats upstream to F1 for flash 1,
     which is what keeps S occupied every beat without any part passing another.
     """
 
@@ -125,7 +125,7 @@ class PartState:
     flash_2_s: float = 0.0
 
     #: Set when the part is sprayed; cleared when its active flash completes.
-    #: Drives the "IF fan paused if a wet part sits at IF" interlock (§7).
+    #: Drives the "F1 fan paused if a wet part sits at F1" interlock (§7).
     is_wet: bool = False
 
     def active_flash_seconds(self) -> float:
@@ -158,22 +158,22 @@ class SensorSnapshot:
 
     occupied: frozenset[Station] = frozenset()
     shutter: ShutterState = ShutterState.UNKNOWN
-    if_fan: FanState = FanState.OFF
-    fd_fan: FanState = FanState.OFF
+    f1_fan: FanState = FanState.OFF
+    f2_fan: FanState = FanState.OFF
     robot_clear: bool = False
     gun_on: bool = False
-    inq_count: int = 0
-    #: Queue-head eye: a part physically staged at the front of INQ. Defaults
+    in_count: int = 0
+    #: Queue-head eye: a part physically staged at the front of IN. Defaults
     #: True so states built without modelling the feed don't block feeds.
-    inq_present: bool = True
+    in_eye: bool = True
     #: Outfeed eye: a finished part awaits removal at OUT.
-    out_present: bool = False
+    out_eye: bool = False
 
     def fan_state(self, station: Station) -> FanState:
-        if station is Station.IF:
-            return self.if_fan
-        if station is Station.FD:
-            return self.fd_fan
+        if station is Station.F1:
+            return self.f1_fan
+        if station is Station.F2:
+            return self.f2_fan
         raise ValueError(f"{station} has no fan")
 
 
@@ -189,10 +189,10 @@ class LineState:
     parts: dict[str, PartState] = field(default_factory=dict)
     occupancy: dict[Station, str] = field(default_factory=dict)
 
-    #: Parts staged at INQ, upstream-most last. Populated when an operator
+    #: Parts staged at IN, upstream-most last. Populated when an operator
     #: declares a batch at the HMI — presence sensors report counts, never
     #: identity, so identity has to enter the system by declaration.
-    inq_queue: tuple[str, ...] = ()
+    in_queue: tuple[str, ...] = ()
 
     #: Intent ids emitted and not yet reported complete.
     pending: tuple[str, ...] = ()
@@ -206,11 +206,11 @@ class LineState:
     pair_index: int = 0
     phase: str = "robot_work"
 
-    if_fan: FanState = FanState.OFF
-    fd_fan: FanState = FanState.OFF
+    f1_fan: FanState = FanState.OFF
+    f2_fan: FanState = FanState.OFF
     shutter: ShutterState = ShutterState.CLOSED
 
-    #: Set while a spray burst is active, so the IF fan can be held off (§7).
+    #: Set while a spray burst is active, so the F1 fan can be held off (§7).
     spray_burst_active: bool = False
 
     fault: str | None = None
@@ -231,8 +231,8 @@ class LineState:
         return None
 
     def fan_state(self, station: Station) -> FanState:
-        if station is Station.IF:
-            return self.if_fan
-        if station is Station.FD:
-            return self.fd_fan
+        if station is Station.F1:
+            return self.f1_fan
+        if station is Station.F2:
+            return self.f2_fan
         raise ValueError(f"{station} has no fan")

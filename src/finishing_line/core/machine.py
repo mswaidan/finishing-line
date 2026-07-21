@@ -228,18 +228,18 @@ def _emit(state: LineState, next_phase: Phase, *intents: Intent) -> StepResult:
 def _robot_work(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepResult:
     """Choreography step 1: robot works, then retracts and sets ROBOT_CLEAR.
 
-    An idle beat (nothing at S) is normal, not exceptional — it is every startup
+    An idle beat (nothing at O) is normal, not exceptional — it is every startup
     fill beat and every drain beat. Skipping straight to the guards is what lets
     §4 and §5 reuse the steady pattern with no special-case code.
     """
     spec = SCHEDULE[state.beat]
-    part = state.part_at(Station.S)
+    part = state.part_at(Station.O)
 
     # A completely empty line HOLDS here rather than cycling beats. Empty-slot
     # beats satisfy every guard trivially, so without this the machine would
     # spin P1..P4 forever, cycling the physical shutter over nothing. Startup
     # and drain still flow: any part anywhere (or queued) resumes the pattern.
-    if not state.occupancy and not state.inq_queue:
+    if not state.occupancy and not state.in_queue:
         return StepResult(state, blocked_by="line empty — declare a batch to begin")
 
     if part is None:
@@ -248,7 +248,7 @@ def _robot_work(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepRes
     if part.role is not spec.robot.role:
         return _enter_fault(
             state,
-            f"beat {state.beat} expects a {spec.robot.role} at S, found {part.role} "
+            f"beat {state.beat} expects a {spec.robot.role} at O, found {part.role} "
             f"({part.part_id})",
         )
 
@@ -268,22 +268,22 @@ def _robot_work(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepRes
     )
     work: tuple[Intent, ...] = (prep,)
 
-    # §7: a wet part at IF may not be blown on while the gun is live. The core
+    # §7: a wet part at F1 may not be blown on while the gun is live. The core
     # plans the pause around the burst rather than around the whole beat, so the
     # trail loses only the spray's worth of fan-on seconds — every second here
     # is a second P3 stretches, and half a second per part.
     #
     # The executor runs a batch in order, which is what makes this correct: the
     # fan is off for exactly the span between these two intents.
-    part_at_if = state.part_at(Station.IF)
-    pausing = spec.if_fan is FanState.ON and part_at_if is not None and part_at_if.is_wet
+    part_at_if = state.part_at(Station.F1)
+    pausing = spec.f1_fan is FanState.ON and part_at_if is not None and part_at_if.is_wet
     if pausing:
-        work += (SetFan(station=Station.IF, state=FanState.OFF),)
+        work += (SetFan(station=Station.F1, state=FanState.OFF),)
 
     work += (SprayPart(part_id=part.part_id, coat=spec.robot.coat),)
 
     if pausing:
-        work += (SetFan(station=Station.IF, state=FanState.ON),)
+        work += (SetFan(station=Station.F1, state=FanState.ON),)
 
     work += (MoveToSafePose(),)
 
@@ -358,8 +358,8 @@ def _set_fans(state: LineState) -> StepResult:
     beat = next_beat(state.beat)
     spec = SCHEDULE[beat]
 
-    if_fan = spec.if_fan if state.occupancy.get(Station.IF) else FanState.OFF
-    fd_fan = spec.fd_fan if state.occupancy.get(Station.FD) else FanState.OFF
+    f1_fan = spec.f1_fan if state.occupancy.get(Station.F1) else FanState.OFF
+    f2_fan = spec.f2_fan if state.occupancy.get(Station.F2) else FanState.OFF
 
     pair_index = state.pair_index + (1 if beat == "P1" else 0)
     state = replace(
@@ -367,15 +367,15 @@ def _set_fans(state: LineState) -> StepResult:
         beat=beat,
         pair_index=pair_index,
         phase=Phase.ROBOT_WORK,
-        if_fan=if_fan,
-        fd_fan=fd_fan,
+        f1_fan=f1_fan,
+        f2_fan=f2_fan,
         shutter=ShutterState.CLOSED,
     )
     return _emit(
         state,
         Phase.ROBOT_WORK,
-        SetFan(station=Station.IF, state=if_fan),
-        SetFan(station=Station.FD, state=fd_fan),
+        SetFan(station=Station.F1, state=f1_fan),
+        SetFan(station=Station.F2, state=f2_fan),
     )
 
 
@@ -390,21 +390,21 @@ def _live_moves(state: LineState) -> tuple[tuple[Station, Station], ...]:
     return tuple(
         (src, dst)
         for src, dst in transition.moves
-        if (src is Station.INQ and state.inq_queue) or state.occupancy.get(src)
+        if (src is Station.IN and state.in_queue) or state.occupancy.get(src)
     )
 
 
 def _apply_moves(state: LineState, moves: tuple[tuple[Station, Station], ...]) -> LineState:
     """Shift the occupancy map. `moves` is ordered vacate-before-fill."""
     occupancy = dict(state.occupancy)
-    inq_queue = state.inq_queue
+    in_queue = state.in_queue
     parts = dict(state.parts)
 
     for src, dst in moves:
-        if src is Station.INQ:
-            if not inq_queue:
+        if src is Station.IN:
+            if not in_queue:
                 continue
-            part_id, inq_queue = inq_queue[0], inq_queue[1:]
+            part_id, in_queue = in_queue[0], in_queue[1:]
         else:
             part_id = occupancy.pop(src, None)
             if part_id is None:
@@ -418,7 +418,7 @@ def _apply_moves(state: LineState, moves: tuple[tuple[Station, Station], ...]) -
         # (Wetness is NOT cleared here: it clears in advance_flash_timers the
         # moment the active flash completes. Movement says nothing about dry.)
 
-    return replace(state, occupancy=occupancy, inq_queue=inq_queue, parts=parts)
+    return replace(state, occupancy=occupancy, in_queue=in_queue, parts=parts)
 
 
 __all__ = ["Inputs", "StepResult", "step"]

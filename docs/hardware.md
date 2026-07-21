@@ -7,9 +7,9 @@ implements exactly this table, and commissioning checks each row off physically.
 
 | Connector | Drives | Notes |
 |---|---|---|
-| M0 | Zone 1 belt (INQ↔IF) | |
-| M1 | Feed belt (INQ queue) | same role as legacy M1 |
-| M2 | Zone 2 belt (S↔FD↔OUT) | |
+| M0 | Z1 belt (IN↔F1) | |
+| M1 | Feed belt (IN queue) | same role as legacy M1 |
+| M2 | Z2 belt (O↔F2↔OUT) | |
 | M3 | Brush motor | legacy BRUSH_ON coil (108) drives it; legacy tuned values: 10 000 steps/s, accel 100 000 |
 
 ## I/O points — all 13 used
@@ -18,18 +18,18 @@ Outputs can only live on IO-0…IO-5; DI-6…8 and A-9…12 are input-only.
 
 | Pin | Dir | Function | Register |
 |---|---|---|---|
-| IO-0 | in | IF presence eye (NPN) | 403 |
-| IO-1 | in | S presence eye (NPN) | 404 |
-| IO-2 | out | IF fan relay | cmd 301 / feedback 401 |
-| IO-3 | out | FD fan relay | cmd 302 / feedback 402 |
+| IO-0 | in | F1 presence eye (NPN) | 403 |
+| IO-1 | in | O presence eye (NPN) | 404 |
+| IO-2 | out | F1 fan relay | cmd 301 / feedback 401 |
+| IO-3 | out | F2 fan relay | cmd 302 / feedback 402 |
 | IO-4 | out | Shutter OPEN solenoid | cmd 300 (=1) |
 | IO-5 | out | Shutter CLOSE solenoid | cmd 300 (=0) |
-| DI-6 | in | FD presence eye (NPN) | 405 |
+| DI-6 | in | F2 presence eye (NPN) | 405 |
 | DI-7 | in | Shutter open end switch | feedback 400 |
 | DI-8 | in | Shutter closed end switch | feedback 400 |
-| A-9 | in | Handoff→Z2 eye (part fully on zone 2) | 407 |
-| A-10 | in | Handoff→Z1 eye (part fully on zone 1) | 408 |
-| A-11 | in | INQ queue-head eye | 409 |
+| A-9 | in | Handoff→Z2 eye (part fully on Z2) | 407 |
+| A-10 | in | Handoff→Z1 eye (part fully on Z1) | 408 |
+| A-11 | in | IN queue-head eye | 409 |
 | A-12 | in | OUT occupancy eye | 415 |
 
 Zero spares. Growth path: CCIO-8 expansion boards (8 points each, up to 8
@@ -38,9 +38,9 @@ feedback registers, or a safety-circuit-OK input.
 
 ## The two new sensors' behaviour (software contract)
 
-- **INQ queue-head eye (409)**: an `INQ→IF` feed move is *blocked* (not
+- **IN queue-head eye (409)**: an `IN→F1` feed move is *blocked* (not
   faulted) while the eye sees nothing — the HMI shows "queue head empty —
-  load parts at INQ" and the line proceeds the moment parts appear.
+  load parts at IN" and the line proceeds the moment parts appear.
 - **OUT occupancy eye (415)**: an outfeed move is *blocked* while a finished
   part sits unremoved at OUT — "outfeed occupied — remove the finished part".
   Prevents pushing a cube into a cube.
@@ -66,7 +66,7 @@ truth comes from the two end switches (register 400: 0 closed / 1 open /
 
 ## Sensor selection (decided 2026-07-17, revised same day for availability)
 
-All presence/handoff/INQ/OUT eyes: **AutomationDirect F18I2-0N-0E** ($37 as
+All presence/handoff/IN/OUT eyes: **AutomationDirect F18I2-0N-0E** ($37 as
 of 2026-07, in stock) — 18 mm plastic tubular, 100 mm diffuse IR, NPN,
 light-on/dark-on selectable, 500 Hz, native 4-pin M12 quick-disconnect.
 Buy 9 + 2 spares + M12 cordsets.
@@ -80,7 +80,7 @@ behaviour as part of the normal io_map walk + sensor-stop hand-trip tests.
 
 ## Shopping list deltas vs today's line
 
-New: 4 photo-eyes (handoff ×2, INQ, OUT), 2 shutter end switches, 5/2
-double-solenoid valve, second fan + contactor, 1 stepper driver if zone 1's
+New: 4 photo-eyes (handoff ×2, IN, OUT), 2 shutter end switches, 5/2
+double-solenoid valve, second fan + contactor, 1 stepper driver if Z1's
 belt is new hardware. Reused: 3 presence eyes' wiring practice, feed belt
 driver, brush motor + driver, existing fan + contactor.

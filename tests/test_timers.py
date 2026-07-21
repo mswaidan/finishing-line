@@ -16,14 +16,14 @@ from .conftest import make_part
 
 def test_flash_accumulates_only_while_the_fan_is_on(cfg):
     part = make_part("p1", PartRole.TRAIL, coats_applied=1)
-    state = LineState(parts={"p1": part}, occupancy={Station.IF: "p1"}, if_fan=FanState.ON)
+    state = LineState(parts={"p1": part}, occupancy={Station.F1: "p1"}, f1_fan=FanState.ON)
 
     parts = advance_flash_timers(state, dt=10.0, cfg=cfg)
     assert parts["p1"].flash_1_s == 10.0
 
     # Fan pauses for a spray burst: the part banks nothing. This is the P3 case,
     # and it is the entire reason P3 stretches past its nominal 195 s.
-    paused = replace(state, parts=parts, if_fan=FanState.OFF)
+    paused = replace(state, parts=parts, f1_fan=FanState.OFF)
     parts = advance_flash_timers(paused, dt=10.0, cfg=cfg)
     assert parts["p1"].flash_1_s == 10.0, "wall-clock at a dead fan is not flash time"
 
@@ -31,7 +31,7 @@ def test_flash_accumulates_only_while_the_fan_is_on(cfg):
 def test_part_away_from_a_fan_banks_nothing(cfg):
     part = make_part("p1", PartRole.LEAD, coats_applied=1)
     state = LineState(
-        parts={"p1": part}, occupancy={Station.S: "p1"}, if_fan=FanState.ON, fd_fan=FanState.ON
+        parts={"p1": part}, occupancy={Station.O: "p1"}, f1_fan=FanState.ON, f2_fan=FanState.ON
     )
     parts = advance_flash_timers(state, dt=60.0, cfg=cfg)
     assert parts["p1"].flash_1_s == 0.0
@@ -40,7 +40,7 @@ def test_part_away_from_a_fan_banks_nothing(cfg):
 def test_timer_targets_the_active_coat(cfg):
     """After coat 1 the part banks flash 1; after coat 2, flash 2."""
     part = make_part("p1", PartRole.LEAD, coats_applied=1)
-    state = LineState(parts={"p1": part}, occupancy={Station.FD: "p1"}, fd_fan=FanState.ON)
+    state = LineState(parts={"p1": part}, occupancy={Station.F2: "p1"}, f2_fan=FanState.ON)
     parts = advance_flash_timers(state, dt=180.0, cfg=cfg)
     assert parts["p1"].flash_1_s == 180.0
     assert parts["p1"].flash_2_s == 0.0
@@ -72,7 +72,7 @@ def test_wet_clears_the_moment_the_flash_completes(cfg):
     misleads the HMI and keeps the §7 IF-fan pause armed for a dry part.
     """
     part = make_part("p1", PartRole.TRAIL, coats_applied=1, flash_1_s=170.0, is_wet=True)
-    state = LineState(parts={"p1": part}, occupancy={Station.IF: "p1"}, if_fan=FanState.ON)
+    state = LineState(parts={"p1": part}, occupancy={Station.F1: "p1"}, f1_fan=FanState.ON)
 
     parts = advance_flash_timers(state, dt=5.0, cfg=cfg)
     assert parts["p1"].is_wet, "still 5s short of the flash target"
@@ -86,7 +86,7 @@ def test_wet_clears_the_moment_the_flash_completes(cfg):
 def test_wet_persists_while_flash_is_interrupted(cfg):
     """A part pulled off a fan mid-flash stays wet — no time, no drying."""
     part = make_part("p1", PartRole.LEAD, coats_applied=1, flash_1_s=100.0, is_wet=True)
-    state = LineState(parts={"p1": part}, occupancy={Station.S: "p1"}, fd_fan=FanState.ON)
+    state = LineState(parts={"p1": part}, occupancy={Station.O: "p1"}, f2_fan=FanState.ON)
     parts = advance_flash_timers(state, dt=500.0, cfg=cfg)
     assert parts["p1"].is_wet, "no fan time banked, so no drying happened"
 

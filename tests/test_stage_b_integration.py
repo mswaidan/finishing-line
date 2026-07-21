@@ -42,7 +42,7 @@ def _staged(*part_ids: str) -> LineState:
         )
         for i, pid in enumerate(part_ids)
     }
-    return LineState(parts=parts, inq_queue=tuple(part_ids))
+    return LineState(parts=parts, in_queue=tuple(part_ids))
 
 
 @pytest.fixture()
@@ -77,7 +77,7 @@ FAST = ProcessConfig(
 
 
 def test_two_parts_full_cycle_over_modbus(stack):
-    """A lead/trail pair goes from INQ to OUT through the real stack.
+    """A lead/trail pair goes from IN to OUT through the real stack.
 
     Every belt move here happened because the executor commanded continuous
     mode over Modbus, physics moved the part, sensors confirmed, and the
@@ -85,7 +85,7 @@ def test_two_parts_full_cycle_over_modbus(stack):
     """
     fake, cc, robot, executor, physics = stack
     state = _staged("L1", "T1")
-    physics.inq_count = 2
+    physics.in_count = 2
     physics.start()
 
     sup = Supervisor(cc=cc, robot=robot, executor=executor, cfg=FAST, state=state, tick_hz=25.0)
@@ -118,7 +118,7 @@ def test_flash_time_banks_only_while_fan_feedback_is_on(stack):
     """
     fake, cc, robot, executor, physics = stack
     state = _staged("L1", "T1")
-    physics.inq_count = 2
+    physics.in_count = 2
     physics.start()
 
     seen: dict[str, object] = dict(state.parts)
@@ -146,7 +146,7 @@ def test_robot_failure_faults_the_line_but_fans_survive(stack):
     """
     fake, cc, robot, executor, physics = stack
     state = _staged("L1", "T1")
-    physics.inq_count = 2
+    physics.in_count = 2
     physics.start()
 
     real_spray = robot.spray
@@ -166,11 +166,11 @@ def test_robot_failure_faults_the_line_but_fans_survive(stack):
     # §7: a part was flashing when the gun died; its fan must still be running.
     from finishing_line.devices.registers import New
 
-    assert fake.holding[New.ZONE1_MOTION_MODE] == 3, "zones must be idle"
-    assert fake.holding[New.ZONE2_MOTION_MODE] == 3
-    flashing_stations = [s for s in (Station.IF, Station.FD) if s in physics.occupied]
+    assert fake.holding[New.Z1_MODE] == 3, "zones must be idle"
+    assert fake.holding[New.Z2_MODE] == 3
+    flashing_stations = [s for s in (Station.F1, Station.F2) if s in physics.occupied]
     if flashing_stations:
-        fan_cmds = {Station.IF: New.IF_FAN_CMD, Station.FD: New.FD_FAN_CMD}
+        fan_cmds = {Station.F1: New.F1_FAN, Station.F2: New.F2_FAN}
         assert any(
             fake.holding[fan_cmds[s]] == 1 for s in flashing_stations
         ), "no fan running over a mid-flash part after fault"

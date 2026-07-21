@@ -63,11 +63,11 @@ STATE_MOVING = 2
 
 #: SensorTarget code -> discrete-input register holding that sensor.
 _TARGET_SENSOR_REG = {
-    SensorTarget.IF_PRESENT: New.IF_PRESENT,
-    SensorTarget.S_PRESENT: New.S_PRESENT,
-    SensorTarget.FD_PRESENT: New.FD_PRESENT,
-    SensorTarget.HANDOFF_TO_Z1: New.HANDOFF_TO_Z1,
-    SensorTarget.HANDOFF_TO_Z2: New.HANDOFF_TO_Z2,
+    SensorTarget.F1_EYE: New.F1_EYE,
+    SensorTarget.O_EYE: New.O_EYE,
+    SensorTarget.F2_EYE: New.F2_EYE,
+    SensorTarget.Z1_EYE: New.Z1_EYE,
+    SensorTarget.Z2_EYE: New.Z2_EYE,
 }
 
 
@@ -106,17 +106,17 @@ class FakeClearCore:
 
     def __post_init__(self) -> None:
         self._zones = (
-            _ZoneBlock(New.ZONE1_MOTION_MODE, New.ZONE1_DISTANCE,
-                       New.ZONE1_REQUEST_ID, New.ZONE1_STATE, New.ZONE1_REQID_ACK,
-                       New.ZONE1_TARGET),
-            _ZoneBlock(New.ZONE2_MOTION_MODE, New.ZONE2_DISTANCE,
-                       New.ZONE2_REQUEST_ID, New.ZONE2_STATE, New.ZONE2_REQID_ACK,
-                       New.ZONE2_TARGET),
+            _ZoneBlock(New.Z1_MODE, New.Z1_DIST,
+                       New.Z1_REQID, New.Z1_STATE, New.Z1_ACK,
+                       New.Z1_TARGET),
+            _ZoneBlock(New.Z2_MODE, New.Z2_DIST,
+                       New.Z2_REQID, New.Z2_STATE, New.Z2_ACK,
+                       New.Z2_TARGET),
         )
-        self.holding[New.ZONE1_MOTION_MODE] = MODE_IDLE
-        self.holding[New.ZONE2_MOTION_MODE] = MODE_IDLE
-        self.input_regs[New.ZONE1_STATE] = STATE_READY
-        self.input_regs[New.ZONE2_STATE] = STATE_READY
+        self.holding[New.Z1_MODE] = MODE_IDLE
+        self.holding[New.Z2_MODE] = MODE_IDLE
+        self.input_regs[New.Z1_STATE] = STATE_READY
+        self.input_regs[New.Z2_STATE] = STATE_READY
         self.input_regs[Status.SERVER_STATE] = STATE_READY  # legacy, static
         self._last_heartbeat = 0
         self._heartbeat_seen_at = time.monotonic()
@@ -172,19 +172,19 @@ class FakeClearCore:
 
         # Fans: contactor-fast, command mirrors to feedback — unless tripped,
         # in which case both are forced ON regardless of command.
-        self.input_regs[New.IF_FAN_FEEDBACK] = 1 if tripped else self.holding[New.IF_FAN_CMD]
-        self.input_regs[New.FD_FAN_FEEDBACK] = 1 if tripped else self.holding[New.FD_FAN_CMD]
+        self.input_regs[New.F1_FAN_FB] = 1 if tripped else self.holding[New.F1_FAN]
+        self.input_regs[New.F2_FAN_FB] = 1 if tripped else self.holding[New.F2_FAN]
 
         # Shutter: feedback lags command by the actuation time, reading MOVING
         # (2) in between. Watchdog does NOT move the shutter — it holds state
         # (§7: shutter holds on fault).
-        cmd = self.holding[New.SHUTTER_CMD]
-        fb = self.input_regs[New.SHUTTER_FEEDBACK]
+        cmd = self.holding[New.SH_CMD]
+        fb = self.input_regs[New.SH_FB]
         if cmd != fb and fb != 2:
-            self.input_regs[New.SHUTTER_FEEDBACK] = 2
+            self.input_regs[New.SH_FB] = 2
             self._shutter_deadline = now + self.shutter_actuation_s
         elif fb == 2 and self._shutter_deadline is not None and now >= self._shutter_deadline:
-            self.input_regs[New.SHUTTER_FEEDBACK] = cmd
+            self.input_regs[New.SH_FB] = cmd
             self._shutter_deadline = None
 
         # Zones: same lifecycle as the legacy conveyor. A distance move is

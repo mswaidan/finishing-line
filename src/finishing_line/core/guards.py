@@ -44,15 +44,15 @@ def departure_blocked(
 
     # Physical end-of-line conditions, both BLOCKS rather than faults: the
     # operator fixes them by loading or unloading parts, no recovery needed.
-    if (Station.INQ, Station.IF) in moves and not sensors.inq_present:
-        return "queue head empty — load parts at INQ"
-    if (Station.FD, Station.OUT) in moves and sensors.out_present:
+    if (Station.IN, Station.F1) in moves and not sensors.in_eye:
+        return "queue head empty — load parts at IN"
+    if (Station.F2, Station.OUT) in moves and sensors.out_eye:
         return "outfeed occupied — remove the finished part at OUT"
 
     # The train advances as a unit, so a destination counts as free if an
     # earlier move in this transition vacates it. Checking each move against
-    # the static sensor snapshot would block IF->S / INQ->IF on the very part
-    # that IF->S is carrying out of the way. `moves` is ordered vacate-before-
+    # the static sensor snapshot would block F1->O / IN->F1 on the very part
+    # that F1->O is carrying out of the way. `moves` is ordered vacate-before-
     # fill precisely so this walk is valid.
     occupied = set(sensors.occupied)
     for source, dest in moves:
@@ -65,7 +65,7 @@ def departure_blocked(
         part = state.part_at(source)
         if part is None:
             continue
-        if source in (Station.IF, Station.FD) and not may_leave_fan(part, cfg):
+        if source in (Station.F1, Station.F2) and not may_leave_fan(part, cfg):
             banked = part.active_flash_seconds()
             return (
                 f"part {part.part_id} has banked {banked:.0f}s of "
@@ -94,9 +94,9 @@ def zone_motion_blocked(
 def spray_station_not_ready(
     state: LineState, sensors: SensorSnapshot, cfg: ProcessConfig
 ) -> Reason:
-    """Scheduling-time subset of `spray_blocked`: shutter closed, part at S.
+    """Scheduling-time subset of `spray_blocked`: shutter closed, part at O.
 
-    Deliberately omits the IF-fan clause. At scheduling time the fan is still
+    Deliberately omits the F1-fan clause. At scheduling time the fan is still
     legitimately running — the core *plans* the pause into the work batch (see
     machine._robot_work), so demanding it already be paused here would deadlock:
     the fan is only paused as part of the spray this guard would be blocking.
@@ -107,16 +107,16 @@ def spray_station_not_ready(
     """
     if sensors.shutter is not ShutterState.CLOSED:
         return f"shutter not confirmed CLOSED (sensor reads {sensors.shutter})"
-    if Station.S not in sensors.occupied:
-        return "no part present at S"
-    if state.part_at(Station.S) is None:
-        return "controller has no part recorded at S"
+    if Station.O not in sensors.occupied:
+        return "no part present at O"
+    if state.part_at(Station.O) is None:
+        return "controller has no part recorded at O"
     return None
 
 
 def spray_blocked(state: LineState, sensors: SensorSnapshot, cfg: ProcessConfig) -> Reason:
-    """§7 in full: shutter CLOSED confirmed, part present and located at S, and
-    the IF fan paused if a wet part occupies IF.
+    """§7 in full: shutter CLOSED confirmed, part present and located at O, and
+    the F1 fan paused if a wet part occupies F1.
 
     The executor must call this immediately before opening the gun. The fan
     clause is the backstop for the P3 beat, not the primary barrier — the closed
@@ -126,23 +126,23 @@ def spray_blocked(state: LineState, sensors: SensorSnapshot, cfg: ProcessConfig)
     if blocked is not None:
         return blocked
 
-    part_at_if = state.part_at(Station.IF)
-    if part_at_if is not None and part_at_if.is_wet and sensors.if_fan is FanState.ON:
-        return f"wet part {part_at_if.part_id} at IF with the IF fan running"
+    part_at_if = state.part_at(Station.F1)
+    if part_at_if is not None and part_at_if.is_wet and sensors.f1_fan is FanState.ON:
+        return f"wet part {part_at_if.part_id} at F1 with the F1 fan running"
     return None
 
 
 def occupancy_mismatch(state: LineState, sensors: SensorSnapshot) -> Reason:
     """§7: does the controller's part map disagree with the presence sensors?
 
-    Checked only at the tracked stations — INQ is a queue whose count is
+    Checked only at the tracked stations — IN is a queue whose count is
     reported separately, and OUT is downstream of everything we control.
 
     Disagreement is a fault, never something to reconcile silently. Recovery is
     an occupancy scan plus operator confirmation of identities, because the
     sensors cannot tell us *which* part they can see.
     """
-    tracked = (Station.IF, Station.S, Station.FD)
+    tracked = (Station.F1, Station.O, Station.F2)
     for station in tracked:
         expected = state.occupancy.get(station) is not None
         observed = station in sensors.occupied
