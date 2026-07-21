@@ -190,6 +190,15 @@ class URClient:
         if not self._control.moveL(pose, v, a):
             raise URError("moveL (base X) failed")
 
+    def move_base_z_mm(self, distance_mm: float, a: float, v: float) -> None:
+        """Base-frame Z move — the vertical spray's standoff approach
+        (calculate_point_to_move_towards base Z+, script:2869).
+        """
+        pose = self._receive.getActualTCPPose()
+        pose[2] += distance_mm / 1000.0
+        if not self._control.moveL(pose, v, a):
+            raise URError("moveL (base Z) failed")
+
     def contact_detect_z(self, *, speed_ms: float = 0.05) -> None:
         """Probe base Z+ until tool contact; ur_rtde retracts to the contact
         point itself — the legacy program's backtrack, in one call.
@@ -239,6 +248,20 @@ class URClient:
 
     def set_sprayer(self, on: bool) -> None:
         self._io.setStandardDigitalOut(self.SPRAYER_OUTPUT, on)
+
+    # ------------------------------------------------------------------- tcp
+
+    def use_spray_tcp(self) -> None:
+        """Switch to the spray tool frame (RobotSetup.spray_tcp). The spray
+        waypoints' inverse-kin only solves correctly under it (script:2859).
+        """
+        self._control.setTcp(list(self._setup.spray_tcp))
+
+    def use_default_tcp(self) -> None:
+        """Restore the sanding/default TCP. The sand-frame waypoints (Sand_Base,
+        ...) were recorded under it, so any post-spray movej must use it.
+        """
+        self._control.setTcp(list(self._setup.tcp))
 
     # ---------------------------------------------------------------- state
 

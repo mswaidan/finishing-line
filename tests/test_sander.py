@@ -10,10 +10,11 @@ from __future__ import annotations
 
 import pytest
 
-from finishing_line.config.loader import ProductSpec, SandConfig
+from finishing_line.config.loader import ProductSpec, SandConfig, SprayConfig
 from finishing_line.core.model import Zone
 from finishing_line.process.robot_ur import URRobot
 from finishing_line.process.sander import Sander
+from finishing_line.process.sprayer import Sprayer
 
 CUBE = ProductSpec(name="cube", legacy_job_id=1, width_mm=362, height_mm=355, depth_mm=349)
 
@@ -21,6 +22,10 @@ SAND_CFG = SandConfig(
     z_force_n=6.0, width_inset_mm=12, movel_a=0.5, movel_v=0.05,
     contact_search_distance_m=1000.0, stopl_on_contact=3.0,
     stopl_on_force_end=5.0, ft_wait_steady_ms=2000,
+)
+SPRAY_CFG = SprayConfig(
+    width_inset_mm=12, approach_z_m=0.1, approach_a=1.2, approach_v=0.25,
+    height_a=0.5, height_v=0.05,
 )
 
 
@@ -114,9 +119,11 @@ def test_traverse_fault_still_lifts_force_and_kills_tool():
 
 
 def _make_robot(log: list) -> URRobot:
-    ur = FakeUR(log)  # one arm: shared by safe_pose and the Sander (as in prod)
-    sander = Sander(ur, FakeCC(log), SAND_CFG)
-    return URRobot(ur, sander, lambda pid: CUBE)
+    ur = FakeUR(log)  # one arm: shared by safe_pose, Sander, Sprayer (as in prod)
+    cc = FakeCC(log)
+    sander = Sander(ur, cc, SAND_CFG)
+    sprayer = Sprayer(ur, cc, SPRAY_CFG)  # constructed, not exercised here
+    return URRobot(ur, sander, sprayer, lambda pid: CUBE)
 
 
 def test_urrobot_sand_drops_clear_and_runs_the_sander():
@@ -137,10 +144,8 @@ def test_urrobot_safe_pose_parks_and_restores_clear():
     assert log[-1] == ("ur.move_to_named", "Sand_Base")  # parked at clear waypoint
 
 
-def test_urrobot_gun_off_and_spray_denib_unimplemented():
+def test_urrobot_gun_off_and_denib_unimplemented():
     robot = _make_robot([])
     assert robot.gun_on() is False
     with pytest.raises(NotImplementedError):
-        robot.spray("p1", 1)
-    with pytest.raises(NotImplementedError):
-        robot.denib("p1")
+        robot.denib("p1")  # §8 open item; spray is covered in test_sprayer.py

@@ -11,9 +11,10 @@ and spray permission is only checked while the gun window is open. (Simple bool
 reads/writes are atomic under the GIL; the Executor writes them, the supervisor
 tick reads them — same as FakeRobot, no lock needed.)
 
-`sand` is implemented; `denib` and `spray` are the next composites (the Sprayer
-choreography and the denib open item, §8) and raise until then. A full schedule
-run under `--ur` needs them — but the conveyor+sand plumbing is exercisable now.
+`sand` and `spray` are implemented; `denib` is the last composite (the §8 open
+item) and raises until its existence/duration is decided. A full schedule run
+under `--ur` needs it on the coat-2 beats — sand/spray/conveyor are exercisable
+now.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from collections.abc import Callable
 from ..config.loader import ProductSpec
 from ..devices.ur import URClient
 from .sander import Sander
+from .sprayer import Sprayer
 
 
 class URRobot:
@@ -36,10 +38,12 @@ class URRobot:
         self,
         ur: URClient,
         sander: Sander,
+        sprayer: Sprayer,
         resolve_product: Callable[[str], ProductSpec],
     ) -> None:
         self._ur = ur
         self._sander = sander
+        self._sprayer = sprayer
         self._resolve_product = resolve_product
         self._clear = True
         self._gun = False
@@ -58,11 +62,17 @@ class URRobot:
         raise NotImplementedError("denib pass not yet defined (§8 open item)")
 
     def spray(self, part_id: str, coat: int) -> None:
-        """Next composite — process/sprayer.py (the 4-JOB spray choreography).
-        When it lands it must hold `self._gun` True across the live-gun window so
-        `gun_on()` gates zone motion honestly (§7).
+        """Apply one coat to the part at O. Blocks until done, gun off by return.
+
+        `_gun` is held True across the whole window so `gun_on()` gates zone
+        motion honestly (§7), even though the Sprayer toggles DO5 per stroke.
         """
-        raise NotImplementedError("spray composite not yet written")
+        self._clear = False
+        self._gun = True
+        try:
+            self._sprayer.spray(self._resolve_product(part_id), coat)
+        finally:
+            self._gun = False
 
     def safe_pose(self) -> None:
         """Retract to the clear waypoint; ROBOT_CLEAR truth follows."""

@@ -79,11 +79,14 @@ def main() -> None:
         robot = FakeRobot(work_s=5.0, spray_s=5.0)
         print(f"conveyor commissioning: real ClearCore at {args.cc}, FAKE robot")
     else:  # --ur: real ClearCore + real UR5e (needs ur_rtde on this host)
-        from ..config.loader import load_products, load_robot_setup, load_sand_config
+        from ..config.loader import (
+            load_products, load_robot_setup, load_sand_config, load_spray_config,
+        )
         from ..devices.registers import CLEARCORE_HOST
         from ..devices.ur import Dashboard, URClient
         from .robot_ur import URRobot
         from .sander import Sander
+        from .sprayer import Sprayer
 
         cc_host = args.cc_host or CLEARCORE_HOST
         cc = ClearCoreClient(cc_host).connect()
@@ -91,11 +94,12 @@ def main() -> None:
         Dashboard(args.ur).connect().power_on_and_release()  # bring the arm to RUNNING
         ur = URClient(args.ur, load_robot_setup())           # RTDE; sets TCP + payload
         sander = Sander(ur, cc, load_sand_config())
+        sprayer = Sprayer(ur, cc, load_spray_config())
         products = load_products()
         # Resolver reads live part identity from the supervisor (built just
-        # below); late-bound, so it resolves at sand time when supervisor exists.
+        # below); late-bound, so it resolves at sand/spray time.
         robot = URRobot(
-            ur, sander,
+            ur, sander, sprayer,
             lambda pid: products[supervisor.state.parts[pid].product.value],
         )
 

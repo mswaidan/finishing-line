@@ -175,9 +175,15 @@ class Waypoint:
 
 @dataclass(frozen=True, slots=True)
 class RobotSetup:
-    """TCP, payload, and default motion params from cell-config."""
+    """TCP, payload, and default motion params from cell-config.
+
+    `tcp` is the sanding/default tool frame; `spray_tcp` is the distinct frame
+    the legacy program set before every spray waypoint (script:2859). The spray
+    waypoints only solve correctly under it, so URClient switches between them.
+    """
 
     tcp: tuple[float, ...]
+    spray_tcp: tuple[float, ...]
     payload_mass_kg: float
     payload_cog_m: tuple[float, ...]
     movej_a: float
@@ -190,6 +196,7 @@ def load_robot_setup(path: Path | None = None) -> RobotSetup:
     motion = _load(path or CELL_CONFIG)["motion"]
     return RobotSetup(
         tcp=tuple(raw["tcp"]),
+        spray_tcp=tuple(raw["spray_tcp"]),
         payload_mass_kg=float(raw["payload"]["mass_kg"]),
         payload_cog_m=tuple(raw["payload"]["cog_m"]),
         movej_a=float(motion["movej_default"]["a"]),
@@ -198,6 +205,33 @@ def load_robot_setup(path: Path | None = None) -> RobotSetup:
             name: Waypoint(p=tuple(w["p"]), q=tuple(w["q"]))
             for name, w in raw["waypoints"].items()
         },
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class SprayConfig:
+    """Tuned spray constants (cell-config). Spraying is NON-CONTACT (no force
+    mode); the gun is DO5. Distances mirror sanding (width - inset, height).
+    """
+
+    width_inset_mm: int
+    approach_z_m: float   # browser vertical: base-Z+ standoff before the raster
+    approach_a: float
+    approach_v: float
+    height_a: float       # moveHeight passes (movel_process)
+    height_v: float
+
+
+def load_spray_config(path: Path | None = None) -> SprayConfig:
+    raw = _load(path or CELL_CONFIG)
+    moves, motion = raw["moves"], raw["motion"]
+    return SprayConfig(
+        width_inset_mm=int(moves["width_inset_mm"]),
+        approach_z_m=float(moves["spray_vertical"]["approach_z_m_job2"]),
+        approach_a=float(motion["movel_spray_approach"]["a"]),
+        approach_v=float(motion["movel_spray_approach"]["v"]),
+        height_a=float(motion["movel_process"]["a"]),
+        height_v=float(motion["movel_process"]["v"]),
     )
 
 

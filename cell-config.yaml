@@ -153,7 +153,12 @@ sensors:
 # -----------------------------------------------------------------------------
 robot:
   tcp: [0.0010032816279412216, 0.1255407840271643, 0.10415400799666161,
-        -0.7853981633974483, 0.0, 0.0]   # script:84 — RZ = -45 deg
+        -0.7853981633974483, 0.0, 0.0]   # script:84 — RZ = -45 deg (sanding TCP)
+  spray_tcp: [0.06314273891748035, -0.10788249600106846, 0.08439511317031662,
+              0.6139431255689367, 0.6139431255689367, -1.4821898202742554]
+        # script:2859 / 3064 — set_tcp before every spray waypoint. Spraying uses
+        # a different tool frame than sanding; the spray waypoints' IK is only
+        # correct under it. Restore `tcp` (above) before any sand-frame movej.
   payload:
     mass_kg: 2.71                          # script:77
     cog_m: [-0.028, -0.028, 0.065]
