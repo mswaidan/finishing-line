@@ -199,7 +199,15 @@ class URClient:
 
     # ---------------------------------------------------------------- force
 
-    def zero_ft(self, settle_s: float = 0.1) -> None:
+    def zero_ft(self, settle_s: float = 0.1, pre_wait_s: float = 0.0) -> None:
+        """Zero the force/torque sensor. `pre_wait_s` is a time-based stand-in
+        for the legacy Robotiq rq_wait_ft_sensor_steady (force.ft_sensor
+        .wait_steady_ms): let the reading settle after the contact stop before
+        zeroing. ur_rtde exposes no FT-steady predicate, so the tuned wait is
+        applied as a fixed delay.
+        """
+        if pre_wait_s > 0.0:
+            time.sleep(pre_wait_s)
         self._control.zeroFtSensor()
         time.sleep(settle_s)
 
@@ -215,8 +223,14 @@ class URClient:
             [0.1, 0.1, 0.15, 0.3490658503988659, 0.3490658503988659, 0.3490658503988659],
         )
 
-    def end_force_mode(self) -> None:
+    def end_force_mode(self, decel: float | None = None) -> None:
+        """Leave force mode, then optionally stopL at `decel` (m/s^2) to halt any
+        residual motion — the legacy stopl(motion.stopl.on_force_end),
+        script:2497.
+        """
         self._control.forceModeStop()
+        if decel is not None:
+            self._control.stopL(decel)
 
     # ------------------------------------------------------------------- io
 

@@ -1,13 +1,16 @@
-"""Runnable orchestrator: `python -m finishing_line.api [--sim | --cc HOST]`
+"""Runnable orchestrator: `python -m finishing_line.api [--sim | --cc HOST | --ur HOST]`
 
 --sim       Full simulation: fake ClearCore + physics + FakeRobot, compressed
             process times. The whole line runs visibly in a browser with zero
             hardware — the Stage C demo.
 --cc HOST   Conveyor commissioning: REAL ClearCore at HOST, FakeRobot standing
-            in for the UR5e. For belt/sensor/shutter bring-up before the robot
-            side exists.
-
-(The full-hardware mode arrives with the real RobotDevice implementation.)
+            in for the UR5e. For belt/sensor/shutter bring-up.
+--ur HOST   Full hardware: REAL ClearCore (--cc-host, default CLEARCORE_HOST)
+            + REAL UR5e at HOST via ur_rtde (Linux/WSL2 only; the arm must
+            already be in Remote control mode). sand + conveyor are live;
+            spray/denib are not yet implemented (URRobot raises), so a full
+            schedule run awaits the Sprayer composite — this mode is for
+            robot/conveyor bring-up until then.
 
 Serves the HMI at http://localhost:8000 — operators only, shop LAN only.
 """
@@ -54,6 +57,10 @@ def main() -> None:
     mode = ap.add_mutually_exclusive_group(required=True)
     mode.add_argument("--sim", action="store_true", help="fully simulated line")
     mode.add_argument("--cc", metavar="HOST", help="real ClearCore, fake robot")
+    mode.add_argument("--ur", metavar="UR_HOST",
+                      help="real ClearCore + real UR5e at UR_HOST (needs ur_rtde: Linux/WSL2)")
+    ap.add_argument("--cc-host", default=None,
+                    help="ClearCore host for --ur (default: registers.CLEARCORE_HOST)")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument(
         "--state-file", default="var/line-state.json",
@@ -67,10 +74,30 @@ def main() -> None:
     if args.sim:
         cfg, cc, robot, physics = _build_sim(cfg)
         print("simulated line: fake ClearCore + physics + fake robot (compressed times)")
-    else:
+    elif args.cc:
         cc = ClearCoreClient(args.cc).connect()
         robot = FakeRobot(work_s=5.0, spray_s=5.0)
         print(f"conveyor commissioning: real ClearCore at {args.cc}, FAKE robot")
+    else:  # --ur: real ClearCore + real UR5e (needs ur_rtde on this host)
+        from ..config.loader import load_products, load_robot_setup, load_sand_config
+        from ..devices.registers import CLEARCORE_HOST
+        from ..devices.ur import Dashboard, URClient
+        from .robot_ur import URRobot
+        from .sander import Sander
+
+        cc_host = args.cc_host or CLEARCORE_HOST
+        cc = ClearCoreClient(cc_host).connect()
+        print(f"FULL HARDWARE: real ClearCore at {cc_host}, real UR5e at {args.ur}")
+        Dashboard(args.ur).connect().power_on_and_release()  # bring the arm to RUNNING
+        ur = URClient(args.ur, load_robot_setup())           # RTDE; sets TCP + payload
+        sander = Sander(ur, cc, load_sand_config())
+        products = load_products()
+        # Resolver reads live part identity from the supervisor (built just
+        # below); late-bound, so it resolves at sand time when supervisor exists.
+        robot = URRobot(
+            ur, sander,
+            lambda pid: products[supervisor.state.parts[pid].product.value],
+        )
 
     from ..process.persistence import StateStore
 

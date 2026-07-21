@@ -34,6 +34,7 @@ is the old ClearCore handshake's: SERVER_STATE polled at 50 Hz.
 from __future__ import annotations
 
 from ..config.loader import ProductSpec, SandConfig
+from ..core.model import Zone
 from ..devices.clearcore import ClearCoreClient
 from ..devices.ur import URClient
 
@@ -53,44 +54,52 @@ class Sander:
     def sand_face(self, product: ProductSpec) -> None:
         """Raster one face of the part currently at O.
 
-        TODO(step 4): implement against hardware in a maintenance window.
+        Preserves the old program's order exactly (script:2460-2497): approach,
+        contact-detect Z, zero the FT sensor, tool on, force-hold Z, run the
+        duet, then end force mode and stop the tool.
 
-        Sequence, preserving the old program's order exactly:
-          1. self._ur.move_to_named("Sand_Base")
-          2. self._ur.contact_detect_z(distance=cfg.contact_search_distance_m)
-          3. self._ur.zero_ft(wait_steady_ms=cfg.ft_wait_steady_ms)
-          4. self._ur.set_tool(True)                     # DO3
-          5. self._ur.begin_force_z(newtons=cfg.z_force_n)
-          6. self._traverse(product)
-          7. self._ur.end_force_mode(stopl=cfg.stopl_on_force_end)
-          8. self._ur.set_tool(False)
-
-        The tool is stopped AFTER force mode ends, matching script:2493-2497 —
-        reversing that order drags a dead sander across a finished face.
+        NEEDS-VALIDATION (real line): force-mode feel and the FT zero settle
+        only behave against a physical part — URSim has no physics. This method
+        is structurally verified by tests/test_sander.py (call order) but its
+        tuning is a maintenance-window item.
         """
-        raise NotImplementedError
+        cfg = self._cfg
+        self._ur.move_to_named("Sand_Base")
+        self._ur.contact_detect_z(speed_ms=cfg.movel_v)
+        self._ur.zero_ft(pre_wait_s=cfg.ft_wait_steady_ms / 1000.0)
+        self._ur.set_tool(True)  # DO3 — sander on
+        self._ur.begin_force_z(newtons=cfg.z_force_n)
+        try:
+            self._traverse(product)
+        finally:
+            # Tool off AFTER force mode ends (script:2493-2497): reversing the
+            # order drags a dead sander across the finished face. In a finally
+            # so a mid-traverse fault still lifts the force and kills the tool.
+            self._ur.end_force_mode(decel=cfg.stopl_on_force_end)
+            self._ur.set_tool(False)
 
     def _traverse(self, product: ProductSpec) -> None:
         """The duet itself: belt axis, robot axis, belt axis, robot axis.
 
-        TODO(step 4).
-
         `pass_mm` is `width - inset`, the tuned pass length that keeps the tool
         from running off the end of the part. `step_mm` is the full part height;
-        the robot covers it in one 355 mm base-X move at 50 mm/s (~7 s).
+        the robot covers it in one base-X move at movel_v (~7 s at 50 mm/s). Both
+        the belt (+pass then -pass) and the robot (-step then +step) return to
+        their start, so a part riding along on Z2 (the flash part at F2) ends
+        where it began.
 
-            pass_mm = product.width_mm - self._cfg.width_inset_mm
-            step_mm = product.height_mm
-
-            self._cc.move_distance_mm(pass_mm)
-            self._cc.wait_ready()                       # SERVER_STATE == 1
-            self._ur.move_base_x_mm(-step_mm, a=..., v=...)
-            self._cc.move_distance_mm(-pass_mm)
-            self._cc.wait_ready()
-            self._ur.move_base_x_mm(+step_mm, a=..., v=...)
-
-        `wait_ready()` between the belt move and the robot move is not optional:
-        it is the SERVER_STATE handshake, and without it the robot steps the
-        height axis while the part is still travelling.
+        The belt runs on ZONE 2 — the O station sits on Z2 (O<->F2<->OUT). The
+        wait_zone_ready between each belt move and the following robot move is
+        the SERVER_STATE handshake; without it the robot steps the height axis
+        while the part is still travelling.
         """
-        raise NotImplementedError
+        cfg = self._cfg
+        pass_mm = float(product.width_mm - cfg.width_inset_mm)
+        step_mm = float(product.height_mm)
+
+        self._cc.move_zone_mm(Zone.Z2, pass_mm)
+        self._cc.wait_zone_ready(Zone.Z2)  # SERVER_STATE == 1
+        self._ur.move_base_x_mm(-step_mm, a=cfg.movel_a, v=cfg.movel_v)
+        self._cc.move_zone_mm(Zone.Z2, -pass_mm)
+        self._cc.wait_zone_ready(Zone.Z2)
+        self._ur.move_base_x_mm(step_mm, a=cfg.movel_a, v=cfg.movel_v)

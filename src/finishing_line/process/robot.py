@@ -4,10 +4,12 @@ A protocol rather than a class so the same Executor runs against three
 implementations without knowing which it has:
 
 - `sim.fake_robot.FakeRobot` — Stage A/B harness; sleeps instead of moving.
-- The real implementation (Stage B on URSim, then hardware): URClient for
-  motion plus the Sander composite for the robot/conveyor duet. Not written
-  yet — sand/spray need force-mode work that only makes sense against a
-  physical part (URSim has no physics).
+- `process.robot_ur.URRobot` — the real implementation: URClient motion plus
+  the Sander composite. `sand`/`safe_pose`/`is_clear`/`gun_on` are done;
+  `spray`/`denib` are the next composites (Sprayer + the §8 denib item) and
+  raise until written. Force-mode feel is validated only against a physical
+  part (URSim has no physics); the call-order contract is locked in
+  tests/test_sander.py.
 
 Every method BLOCKS until the operation is physically complete — the Executor
 provides the threading, devices provide the truth. `is_clear`/`gun_on` are the
