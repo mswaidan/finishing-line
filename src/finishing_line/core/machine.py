@@ -26,7 +26,7 @@ from ..config.loader import ProcessConfig
 from . import guards, timers
 from .intents import (
     AdvanceTrain,
-    DenibPart,
+    CleanGun,
     HaltZones,
     Intent,
     MoveToSafePose,
@@ -264,7 +264,7 @@ def _robot_work(state: LineState, inputs: Inputs, cfg: ProcessConfig) -> StepRes
         return StepResult(state, blocked_by=blocked)
 
     prep: Intent = (
-        DenibPart(part_id=part.part_id) if spec.robot.denib else SandPart(part_id=part.part_id)
+        CleanGun(part_id=part.part_id) if spec.robot.clean_gun else SandPart(part_id=part.part_id)
     )
     work: tuple[Intent, ...] = (prep,)
 

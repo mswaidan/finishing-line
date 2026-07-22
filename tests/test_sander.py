@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from finishing_line.config.loader import ProductSpec, SandConfig, SprayConfig
+from finishing_line.config.loader import BrushConfig, ProductSpec, SandConfig, SprayConfig
 from finishing_line.core.model import Zone
+from finishing_line.process.gun_clean import GunClean
 from finishing_line.process.robot_ur import URRobot
 from finishing_line.process.sander import Sander
 from finishing_line.process.sprayer import Sprayer
@@ -26,6 +27,10 @@ SAND_CFG = SandConfig(
 SPRAY_CFG = SprayConfig(
     width_inset_mm=12, approach_z_m=0.1, approach_a=1.2, approach_v=0.25,
     height_a=0.5, height_v=0.05,
+)
+BRUSH_CFG = BrushConfig(
+    contact_v=0.05, retract_off_mm=3.0, retract_a=0.5, retract_v=0.1,
+    settle_before_on_s=0.0, duration_s=0.0, settle_after_off_s=0.0,
 )
 
 
@@ -119,11 +124,12 @@ def test_traverse_fault_still_lifts_force_and_kills_tool():
 
 
 def _make_robot(log: list) -> URRobot:
-    ur = FakeUR(log)  # one arm: shared by safe_pose, Sander, Sprayer (as in prod)
+    ur = FakeUR(log)  # one arm: shared by safe_pose + all composites (as in prod)
     cc = FakeCC(log)
     sander = Sander(ur, cc, SAND_CFG)
     sprayer = Sprayer(ur, cc, SPRAY_CFG)  # constructed, not exercised here
-    return URRobot(ur, sander, sprayer, lambda pid: CUBE)
+    gun_clean = GunClean(ur, cc, BRUSH_CFG)
+    return URRobot(ur, sander, sprayer, gun_clean, lambda pid: CUBE)
 
 
 def test_urrobot_sand_drops_clear_and_runs_the_sander():
@@ -144,8 +150,6 @@ def test_urrobot_safe_pose_parks_and_restores_clear():
     assert log[-1] == ("ur.move_to_named", "Sand_Base")  # parked at clear waypoint
 
 
-def test_urrobot_gun_off_and_denib_unimplemented():
+def test_urrobot_gun_off():
     robot = _make_robot([])
-    assert robot.gun_on() is False
-    with pytest.raises(NotImplementedError):
-        robot.denib("p1")  # §8 open item; spray is covered in test_sprayer.py
+    assert robot.gun_on() is False  # sand/spray/clean_gun covered in their own tests

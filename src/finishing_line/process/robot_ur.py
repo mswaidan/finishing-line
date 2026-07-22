@@ -11,10 +11,11 @@ and spray permission is only checked while the gun window is open. (Simple bool
 reads/writes are atomic under the GIL; the Executor writes them, the supervisor
 tick reads them — same as FakeRobot, no lock needed.)
 
-`sand` and `spray` are implemented; `denib` is the last composite (the §8 open
-item) and raises until its existence/duration is decided. A full schedule run
-under `--ur` needs it on the coat-2 beats — sand/spray/conveyor are exercisable
-now.
+`sand`, `spray`, and `clean_gun` (the gun-tip brush clean) are all implemented —
+URRobot fully realizes RobotDevice, so `--ur` can run the whole interleaved
+schedule against real hardware. Force-mode and spray *feel* is still maintenance-
+window territory (URSim has no physics); the call-order contracts are locked in
+tests/test_sander.py, test_sprayer.py, and test_gun_clean.py.
 """
 
 from __future__ import annotations
@@ -23,6 +24,7 @@ from collections.abc import Callable
 
 from ..config.loader import ProductSpec
 from ..devices.ur import URClient
+from .gun_clean import GunClean
 from .sander import Sander
 from .sprayer import Sprayer
 
@@ -39,11 +41,13 @@ class URRobot:
         ur: URClient,
         sander: Sander,
         sprayer: Sprayer,
+        gun_clean: GunClean,
         resolve_product: Callable[[str], ProductSpec],
     ) -> None:
         self._ur = ur
         self._sander = sander
         self._sprayer = sprayer
+        self._gun_clean = gun_clean
         self._resolve_product = resolve_product
         self._clear = True
         self._gun = False
@@ -55,11 +59,12 @@ class URRobot:
         self._clear = False
         self._sander.sand_face(self._resolve_product(part_id))
 
-    def denib(self, part_id: str) -> None:
-        """OPEN ITEM (§8): the denib pass is unconfirmed (existence + duration).
-        Implement alongside the coat-2 choreography once decided.
+    def clean_gun(self, part_id: str) -> None:
+        """Clean the HVLP tip on the brush before a coat (see GunClean). Blocks
+        until done. `part_id` is unused — the clean is per-beat, not per-part.
         """
-        raise NotImplementedError("denib pass not yet defined (§8 open item)")
+        self._clear = False
+        self._gun_clean.clean()
 
     def spray(self, part_id: str, coat: int) -> None:
         """Apply one coat to the part at O. Blocks until done, gun off by return.

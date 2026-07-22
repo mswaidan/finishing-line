@@ -89,10 +89,20 @@ def _zone_targets(
 
 
 class TrainMover:
-    def __init__(self, cc: ClearCoreClient, *, timeout_s: float = 60.0, poll_s: float = 0.02) -> None:
+    def __init__(
+        self,
+        cc: ClearCoreClient,
+        *,
+        timeout_s: float = 60.0,
+        poll_s: float = 0.02,
+        post_shift_timeout_s: float = 2.0,
+    ) -> None:
         self._cc = cc
         self._timeout_s = timeout_s
         self._poll_s = poll_s
+        # How long to wait for the post-shift sensor pattern. 2 s suits real belt
+        # speed; bench mode (manual sensor triggering) needs a human-paced value.
+        self._post_shift_timeout_s = post_shift_timeout_s
 
     def advance(self, direction: Direction, moves: tuple[Move, ...]) -> None:
         if not moves:
@@ -128,7 +138,7 @@ class TrainMover:
                 lambda: all(self._cc.presence(d) for d in dests)
                 and not any(self._cc.presence(s) for s in source_only),
                 f"post-shift pattern for {[f'{s}->{d}' for s, d in moves]}",
-                timeout_s=2.0,
+                timeout_s=self._post_shift_timeout_s,
             )
         finally:
             # Belts idle no matter what. On the failure path parts are in an

@@ -10,8 +10,9 @@ from __future__ import annotations
 
 import pytest
 
-from finishing_line.config.loader import ProductSpec, SprayConfig
+from finishing_line.config.loader import BrushConfig, ProductSpec, SprayConfig
 from finishing_line.core.model import Zone
+from finishing_line.process.gun_clean import GunClean
 from finishing_line.process.robot_ur import URRobot
 from finishing_line.process.sander import Sander
 from finishing_line.process.sprayer import Sprayer
@@ -23,6 +24,10 @@ STEREOCAB = ProductSpec(name="45", legacy_job_id=3, width_mm=724, height_mm=235,
 CFG = SprayConfig(
     width_inset_mm=12, approach_z_m=0.1, approach_a=1.2, approach_v=0.25,
     height_a=0.5, height_v=0.05,
+)
+BRUSH_CFG = BrushConfig(
+    contact_v=0.05, retract_off_mm=3.0, retract_a=0.5, retract_v=0.1,
+    settle_before_on_s=0.0, duration_s=0.0, settle_after_off_s=0.0,
 )
 
 
@@ -131,7 +136,10 @@ def test_unsupported_product_raises_but_restores_tcp():
 def test_urrobot_spray_dispatches_and_clears_gun():
     log: list = []
     ur, cc = FakeUR(log), FakeCC(log)
-    robot = URRobot(ur, Sander(ur, cc, None), Sprayer(ur, cc, CFG), lambda pid: BROWSER)
+    robot = URRobot(
+        ur, Sander(ur, cc, None), Sprayer(ur, cc, CFG),
+        GunClean(ur, cc, BRUSH_CFG), lambda pid: BROWSER,
+    )
     robot.spray("p1", 1)
     assert robot.gun_on() is False        # window closed on return
     assert robot.is_clear() is False      # not clear until safe_pose

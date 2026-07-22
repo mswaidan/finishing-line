@@ -33,8 +33,8 @@ Pair *n* = (Lₙ, Tₙ). Previous pair = (Lₙ₋₁, Tₙ₋₁). Next pair = (
 |------|------------------|----|----|--------|--------|---------|
 | **P1** | Lₙ — sand + coat 1 | Tₙ staged | Tₙ₋₁ flash 2 | OFF | ON | CLOSED |
 | **P2** | Tₙ — sand + coat 1 | empty | Lₙ flash 1 | OFF | ON | CLOSED |
-| **P3** | Lₙ — denib + coat 2 | Tₙ flash 1 | empty | ON (pause during spray burst) | OFF | CLOSED |
-| **P4** | Tₙ — denib + coat 2 | Lₙ₊₁ staged | Lₙ flash 2 | OFF | ON | CLOSED |
+| **P3** | Lₙ — gun-clean + coat 2 | Tₙ flash 1 | empty | ON (pause during spray burst) | OFF | CLOSED |
+| **P4** | Tₙ — gun-clean + coat 2 | Lₙ₊₁ staged | Lₙ flash 2 | OFF | ON | CLOSED |
 
 ### Zone motions between beats (shutter OPEN for every transition)
 
@@ -79,7 +79,7 @@ No special-case logic needed — startup is the steady pattern with unoccupied s
 
 Beat duration = **flash time (180 s) + transfer (~15 s) ≈ 195 s**. Period ≈ 13 min for 2 parts → **~6.5 min/part effective, ~74/day at 8 h, ~370/week.**
 
-Robot work per beat: coat-1 beats ≈ 90 s (sand + spray), coat-2 beats ≈ 45 s (denib + spray). The robot is idle 55–75% of each beat — **flash time paces the line**, so any future flash reduction (heated air) shortens the beat directly.
+Robot work per beat: coat-1 beats ≈ 90 s (sand + spray), coat-2 beats ≈ 45 s (gun-clean + spray). The robot is idle 55–75% of each beat — **flash time paces the line**, so any future flash reduction (heated air) shortens the beat directly.
 
 **Validate per-part, not per-beat.** The controller tracks each part's state: {coats applied, flash-1 seconds accumulated, flash-2 seconds accumulated}. Guard conditions:
 - Part may leave a fan position only if the active flash timer ≥ 180 s
@@ -104,6 +104,9 @@ Beat counting alone will drift from truth on any fault or manual intervention; p
 
 - Confirm transfer time per zone move (assumed 15 s) — measure with a stopwatch on the current line
 - Decide shutter actuator (pneumatic slide gate assumed; shop air already at the station)
-- Confirm whether coat 2 gets a denib pass and its duration
+- ~~Confirm whether coat 2 gets a denib pass~~ — RESOLVED: the coat-2 "denib" is
+  an HVLP gun-tip clean on the rotating brush (legacy coil 108), ~30 s
+  (cell-config `brush_duration_s`), *not* a product operation. See
+  `process/gun_clean.py`.
 - Browser parts: verify they fit the same station geometry and schedule, or run them in dedicated blocks
 - Rework loop stays offline at QC (unchanged)

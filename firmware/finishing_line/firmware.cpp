@@ -19,6 +19,11 @@
 #include "modbus_tcp.h"
 #include "registers.h"
 
+// Read a presence/handoff eye applying the configured polarity (io_map
+// EYES_ACTIVE_LOW). Not applied to the shutter end-switches, which are separate
+// mechanical inputs.
+#define EYE(pin) (EYES_ACTIVE_LOW ? !(pin).State() : (pin).State())
+
 namespace {
 
 RegisterFile regs;
@@ -278,13 +283,13 @@ void firmwareLoop() {
   }
 
   // ---- sensors -> discrete inputs (debounced; these gate belt stops)
-  regs.discrete[REG_F1_EYE] = dbIf.update(PIN_F1_EYE.State(), nowMs);
-  regs.discrete[REG_O_EYE] = dbS.update(PIN_O_EYE.State(), nowMs);
-  regs.discrete[REG_F2_EYE] = dbFd.update(PIN_F2_EYE.State(), nowMs);
-  regs.discrete[REG_Z1_EYE] = dbHandZ1.update(PIN_Z1_EYE.State(), nowMs);
-  regs.discrete[REG_Z2_EYE] = dbHandZ2.update(PIN_Z2_EYE.State(), nowMs);
-  regs.discrete[REG_IN_EYE] = dbInq.update(PIN_IN_EYE.State(), nowMs);
-  regs.discrete[REG_OUT_EYE] = dbOut.update(PIN_OUT_EYE.State(), nowMs);
+  regs.discrete[REG_F1_EYE] = dbIf.update(EYE(PIN_F1_EYE), nowMs);
+  regs.discrete[REG_O_EYE] = dbS.update(EYE(PIN_O_EYE), nowMs);
+  regs.discrete[REG_F2_EYE] = dbFd.update(EYE(PIN_F2_EYE), nowMs);
+  regs.discrete[REG_Z1_EYE] = dbHandZ1.update(EYE(PIN_Z1_EYE), nowMs);
+  regs.discrete[REG_Z2_EYE] = dbHandZ2.update(EYE(PIN_Z2_EYE), nowMs);
+  regs.discrete[REG_IN_EYE] = dbInq.update(EYE(PIN_IN_EYE), nowMs);
+  regs.discrete[REG_OUT_EYE] = dbOut.update(EYE(PIN_OUT_EYE), nowMs);
   bool shutOpen = dbShutOpen.update(PIN_SH_OPEN_EYE.State(), nowMs);
   bool shutClosed = dbShutClosed.update(PIN_SH_CLOSED_EYE.State(), nowMs);
 

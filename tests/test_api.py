@@ -33,8 +33,8 @@ PORT = 15025
 
 FAST = ProcessConfig(
     flash_seconds=1.2, coats=2, spray_burst_pause_s=0.25, transfer_s=0.25,
-    robot_coat1_s=0.5, robot_coat2_s=0.5, denib_enabled=True,
-    denib_duration_s=0.2, provenance={"flash_seconds": "assumed"},
+    robot_coat1_s=0.5, robot_coat2_s=0.5, clean_gun_enabled=True,
+    clean_gun_duration_s=0.2, provenance={"flash_seconds": "assumed"},
 )
 
 

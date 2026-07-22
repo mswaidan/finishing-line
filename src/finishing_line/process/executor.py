@@ -30,7 +30,7 @@ import threading
 
 from ..core.intents import (
     AdvanceTrain,
-    DenibPart,
+    CleanGun,
     HaltZones,
     Intent,
     MoveToSafePose,
@@ -139,8 +139,8 @@ class Executor:
                 self._train.advance(direction, moves)
             case SandPart(part_id=part_id):
                 self._robot.sand(part_id)
-            case DenibPart(part_id=part_id):
-                self._robot.denib(part_id)
+            case CleanGun(part_id=part_id):
+                self._robot.clean_gun(part_id)
             case SprayPart(part_id=part_id, coat=coat):
                 self._robot.spray(part_id, coat)
             case MoveToSafePose():

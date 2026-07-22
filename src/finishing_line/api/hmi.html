@@ -130,7 +130,8 @@ function render(s){
     }
     const fan = (st==="F1"||st==="F2")
       ? `<span class="fan ${s.clearcore.fans?.[st] ? "on":""}">${s.clearcore.fans?.[st] ? "FAN ON":"fan off"}</span>` : "";
-    return `<div class="station"><h3>${st}${fan}</h3>${inner}</div>`;
+    const spray = (st==="O" && s.spraying) ? `<span class="fan on">SPRAYING</span>` : "";
+    return `<div class="station"><h3>${st}${fan}${spray}</h3>${inner}</div>`;
   }).join("");
 
   const ack = $("ack-panel");

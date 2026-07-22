@@ -40,12 +40,14 @@ process:
     transfer_s: 15.0
     provenance_transfer: assumed   # OPEN: stopwatch on the current line (§8).
     robot_coat1_s: 90.0            # sand + spray
-    robot_coat2_s: 45.0            # denib + spray
+    robot_coat2_s: 45.0            # gun clean + spray
     beat_s: 195.0
     period_s: 780.0                # + spray_burst_pause_s in practice
 
-  denib:
-    # OPEN (§8): not confirmed that coat 2 gets a denib pass, nor its duration.
+  clean_gun:
+    # The coat-2 gun-tip brush clean (process/gun_clean.py) — NOT a product
+    # denib. This duration_s is the NOMINAL used for throughput math; the tuned
+    # brush run is cell-config brush_duration_s (30 s).
     enabled: true
     duration_s: 20.0
     provenance: assumed

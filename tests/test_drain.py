@@ -93,7 +93,7 @@ def test_soak_a_production_run(cfg):
         transfer_s=2.0,
         robot_coat1_s=32.0,  # FakeLine sand = coat1 - 30
         robot_coat2_s=3.0,
-        denib_duration_s=1.0,
+        clean_gun_duration_s=1.0,
         spray_burst_pause_s=2.0,
     )
     ids = [f"{'L' if i % 2 == 0 else 'T'}{i // 2 + 1}" for i in range(20)]

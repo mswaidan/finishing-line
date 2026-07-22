@@ -117,6 +117,7 @@ class ClearCoreClient:
         timeout_s: float = 2.0,
         poll_s: float = 0.02,
         kinematics: ConveyorKinematics | None = None,
+        stub_shutter: bool = False,
     ) -> None:
         if ModbusTcpClient is None:
             raise ClearCoreError("pymodbus is not installed (pip install .[devices])")
@@ -125,6 +126,13 @@ class ClearCoreClient:
         self._kinematics = kinematics or load_conveyor_kinematics()
         self._request_id = 0
         self._heartbeat = 0
+        # Bench mode: with no shutter end-switches installed, the feedback is
+        # meaningless (reads MOVING forever). When stubbed, shutter_state()
+        # reports the last commanded position, so wait_shutter and the §7 gates
+        # behave as if the shutter followed the command instantly. Command is
+        # still written (harmless — the solenoid outputs aren't wired either).
+        self._stub_shutter = stub_shutter
+        self._shutter_stub_state = ShutterState.CLOSED
 
     # ------------------------------------------------------------- lifecycle
 
@@ -258,6 +266,12 @@ class ClearCoreClient:
         """
         self._write_coil(Command.FEED_CONVEYOR, on)
 
+    def set_brush(self, on: bool) -> None:
+        """The spray-gun cleanoff brush (legacy coil 108, BRUSH_ON). Firmware
+        spins O_BRUSH while this coil is set — driven by the gun-clean composite.
+        """
+        self._write_coil(Command.BRUSH_ON, on)
+
     def fan_on(self, station: Station) -> bool:
         """Feedback, not command — what the fan is actually doing."""
         return bool(self._read_register(_FAN_FEEDBACK[station]))
@@ -269,8 +283,12 @@ class ClearCoreClient:
         if target not in (ShutterState.OPEN, ShutterState.CLOSED):
             raise ValueError(f"cannot command shutter to {target}")
         self._write_register(New.SH_CMD, 1 if target is ShutterState.OPEN else 0)
+        if self._stub_shutter:
+            self._shutter_stub_state = target
 
     def shutter_state(self) -> ShutterState:
+        if self._stub_shutter:
+            return self._shutter_stub_state
         raw = self._read_register(New.SH_FB)
         return _SHUTTER_FROM_FEEDBACK.get(raw, ShutterState.UNKNOWN)
 

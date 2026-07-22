@@ -315,6 +315,8 @@ moves:
   spray_cube_horizontal:  # script:3063-3111, JOB 1
     pass_1: "width - 12"
     pass_2: "-width + 12"
+  brush_clean:          # script:3122-3164 — HVLP gun-tip clean on the brush
+    retract_off_mm: 3.0   # script:3150 — back off the hard-contact point before BRUSH_ON
   dry:                  # script:3169-3183
     initial_advance: "width + 500"   # 500mm clearance past the part
     oscillate_back: "-(width / 2)"

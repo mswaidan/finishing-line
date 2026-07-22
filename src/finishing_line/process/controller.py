@@ -202,6 +202,7 @@ class LineController:
             "enabled": enabled,
             "beat": state.beat,
             "phase": str(state.phase),
+            "spraying": state.spray_burst_active,
             "fault": state.fault,
             "blocked_by": state.fault or blocked,
             "occupancy": {st.name: pid for st, pid in state.occupancy.items()},

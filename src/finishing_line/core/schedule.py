@@ -52,14 +52,14 @@ def next_beat(beat: Beat) -> Beat:
 class RobotWork:
     """What the robot does at O during a beat.
 
-    `denib` distinguishes the coat-2 beats. Whether coat 2 actually gets a denib
-    pass, and how long it takes, is an OPEN ITEM (§8) — the duration below is a
-    placeholder and must not be treated as tuned.
+    `clean_gun` distinguishes the coat-2 beats: instead of sanding, the robot
+    cleans the HVLP tip on the brush before spraying coat 2. `nominal_s` is a
+    placeholder for throughput math, not a tuned value.
     """
 
     role: PartRole
     coat: int
-    denib: bool
+    clean_gun: bool
     nominal_s: float
 
 
@@ -82,30 +82,30 @@ class BeatSpec:
 SCHEDULE: dict[Beat, BeatSpec] = {
     # O: Lₙ sand + coat 1 | F1: Tₙ staged | F2: Tₙ₋₁ flash 2
     "P1": BeatSpec(
-        robot=RobotWork(role=PartRole.LEAD, coat=1, denib=False, nominal_s=90.0),
+        robot=RobotWork(role=PartRole.LEAD, coat=1, clean_gun=False, nominal_s=90.0),
         f1_fan=FanState.OFF,
         f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,
     ),
     # O: Tₙ sand + coat 1 | F1: empty | F2: Lₙ flash 1
     "P2": BeatSpec(
-        robot=RobotWork(role=PartRole.TRAIL, coat=1, denib=False, nominal_s=90.0),
+        robot=RobotWork(role=PartRole.TRAIL, coat=1, clean_gun=False, nominal_s=90.0),
         f1_fan=FanState.OFF,
         f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,
     ),
-    # O: Lₙ denib + coat 2 | F1: Tₙ flash 1 | F2: empty
+    # O: Lₙ gun-clean + coat 2 | F1: Tₙ flash 1 | F2: empty
     # The only beat with a live upstream fan, and so the only one that stretches.
     "P3": BeatSpec(
-        robot=RobotWork(role=PartRole.LEAD, coat=2, denib=True, nominal_s=45.0),
+        robot=RobotWork(role=PartRole.LEAD, coat=2, clean_gun=True, nominal_s=45.0),
         f1_fan=FanState.ON,
         f2_fan=FanState.OFF,
         shutter=ShutterState.CLOSED,
         f1_fan_pauses_during_spray=True,
     ),
-    # O: Tₙ denib + coat 2 | F1: Lₙ₊₁ staged | F2: Lₙ flash 2
+    # O: Tₙ gun-clean + coat 2 | F1: Lₙ₊₁ staged | F2: Lₙ flash 2
     "P4": BeatSpec(
-        robot=RobotWork(role=PartRole.TRAIL, coat=2, denib=True, nominal_s=45.0),
+        robot=RobotWork(role=PartRole.TRAIL, coat=2, clean_gun=True, nominal_s=45.0),
         f1_fan=FanState.OFF,
         f2_fan=FanState.ON,
         shutter=ShutterState.CLOSED,

@@ -30,9 +30,9 @@ class FakeRobot:
         self.log.append(("sand", part_id))
         time.sleep(self.work_s)
 
-    def denib(self, part_id: str) -> None:
+    def clean_gun(self, part_id: str) -> None:
         self._clear = False
-        self.log.append(("denib", part_id))
+        self.log.append(("clean_gun", part_id))
         time.sleep(self.work_s)
 
     def spray(self, part_id: str, coat: int) -> None:

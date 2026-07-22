@@ -22,8 +22,8 @@ def cfg() -> ProcessConfig:
         transfer_s=15.0,
         robot_coat1_s=90.0,
         robot_coat2_s=45.0,
-        denib_enabled=True,
-        denib_duration_s=20.0,
+        clean_gun_enabled=True,
+        clean_gun_duration_s=20.0,
         provenance={"flash_seconds": "assumed", "spray_burst_pause_s": "assumed"},
     )
 

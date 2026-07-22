@@ -210,7 +210,9 @@ class LineState:
     f2_fan: FanState = FanState.OFF
     shutter: ShutterState = ShutterState.CLOSED
 
-    #: Set while a spray burst is active, so the F1 fan can be held off (§7).
+    #: Live mirror of robot.gun_on(), refreshed each tick by the supervisor —
+    #: the HMI's "spraying now" signal. NOT an interlock input: the F1-fan pause
+    #: is planned as bracketing SetFan intents in machine.py.
     spray_burst_active: bool = False
 
     fault: str | None = None

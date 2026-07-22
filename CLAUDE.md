@@ -51,5 +51,5 @@ Python cell controller on the cell PC owns ALL orchestration; devices are dumb e
 
 - Measure actual zone transfer time
 - Choose shutter actuator + feedback sensor
-- Confirm denib pass before coat 2 and its duration
+- (Resolved) The coat-2 "denib" is an HVLP gun-tip brush clean (~30 s), not a product operation — see `process/gun_clean.py`
 - Decide whether HMI moves off the NAS onto the orchestrator later

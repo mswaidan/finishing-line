@@ -5,11 +5,11 @@ implementations without knowing which it has:
 
 - `sim.fake_robot.FakeRobot` — Stage A/B harness; sleeps instead of moving.
 - `process.robot_ur.URRobot` — the real implementation: URClient motion plus
-  the Sander composite. `sand`/`safe_pose`/`is_clear`/`gun_on` are done;
-  `spray`/`denib` are the next composites (Sprayer + the §8 denib item) and
-  raise until written. Force-mode feel is validated only against a physical
-  part (URSim has no physics); the call-order contract is locked in
-  tests/test_sander.py.
+  the Sander / Sprayer / GunClean composites. Every RobotDevice method is
+  implemented, so it can run the whole schedule against hardware. Force and
+  spray *feel* is validated only against a physical part (URSim has no
+  physics); the call-order contracts are locked in tests/test_sander.py,
+  test_sprayer.py, and test_gun_clean.py.
 
 Every method BLOCKS until the operation is physically complete — the Executor
 provides the threading, devices provide the truth. `is_clear`/`gun_on` are the
@@ -27,8 +27,8 @@ class RobotDevice(Protocol):
         """Sand the face of the part at O. Blocks until done, tool stopped."""
         ...
 
-    def denib(self, part_id: str) -> None:
-        """Denib pass before coat 2. Blocks until done."""
+    def clean_gun(self, part_id: str) -> None:
+        """Clean the HVLP gun tip on the brush before coat 2. Blocks until done."""
         ...
 
     def spray(self, part_id: str, coat: int) -> None:

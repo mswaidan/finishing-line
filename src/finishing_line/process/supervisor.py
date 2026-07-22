@@ -92,6 +92,11 @@ class Supervisor:
                                     completed=self.executor.completed(),
                                     fault=fault), self.cfg)
         self.state = result.state
+        # Observability only: mirror the live gun state into the line state so
+        # the HMI can show "spraying now". This is NOT the F1-fan interlock —
+        # that pause is planned as SetFan intents bracketing the burst (below /
+        # machine.py). gun_on comes from the robot, so it reflects reality.
+        self.state = replace(self.state, spray_burst_active=sensors.gun_on)
         self.executor.submit(result.intents)
 
         # §7 on fault entry: flashing parts keep drying. A fault landing inside

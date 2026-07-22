@@ -70,8 +70,8 @@ FAST = ProcessConfig(
     transfer_s=0.25,
     robot_coat1_s=0.5,
     robot_coat2_s=0.5,
-    denib_enabled=True,
-    denib_duration_s=0.2,
+    clean_gun_enabled=True,
+    clean_gun_duration_s=0.2,
     provenance={},
 )
 

@@ -47,8 +47,11 @@ class SandPart(Intent):
 class SprayPart(Intent):
     """Apply one coat to the part at O.
 
-    The executor must raise `spray_burst_active` for the duration, so the F1 fan
-    interlock (§7) can pause the upstream fan while the gun is live.
+    The F1-fan pause during a P3 burst is planned by the core as SetFan(F1, OFF)
+    / SetFan(F1, ON) intents bracketing this one (machine.py), so the executor's
+    in-order run holds the upstream fan off for exactly the gun-live span. The
+    `LineState.spray_burst_active` field is a live mirror of the gun for the HMI,
+    not an input to any interlock.
     """
 
     part_id: str
@@ -56,10 +59,10 @@ class SprayPart(Intent):
 
 
 @dataclass(frozen=True, slots=True)
-class DenibPart(Intent):
-    """Denib pass before coat 2.
-
-    OPEN ITEM (§8): not yet confirmed that this pass exists or how long it takes.
+class CleanGun(Intent):
+    """Clean the HVLP gun tip on the rotating brush (legacy coil 108) before a
+    coat sprays. Runs on coat-2 beats in place of the sand. NOT a product
+    operation — "denib" was a misnomer for a gun-tip clean.
     """
 
     part_id: str

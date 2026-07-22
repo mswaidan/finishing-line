@@ -32,8 +32,8 @@ class ProcessConfig:
     transfer_s: float
     robot_coat1_s: float
     robot_coat2_s: float
-    denib_enabled: bool
-    denib_duration_s: float
+    clean_gun_enabled: bool
+    clean_gun_duration_s: float
     provenance: dict[str, str]
 
     def nominal_period_s(self) -> float:
@@ -99,13 +99,13 @@ def load_process_config(path: Path | None = None) -> ProcessConfig:
         transfer_s=float(nominal["transfer_s"]),
         robot_coat1_s=float(nominal["robot_coat1_s"]),
         robot_coat2_s=float(nominal["robot_coat2_s"]),
-        denib_enabled=bool(raw["denib"]["enabled"]),
-        denib_duration_s=float(raw["denib"]["duration_s"]),
+        clean_gun_enabled=bool(raw["clean_gun"]["enabled"]),
+        clean_gun_duration_s=float(raw["clean_gun"]["duration_s"]),
         provenance={
             "flash_seconds": raw["provenance_flash"],
             "spray_burst_pause_s": raw["provenance_burst"],
             "transfer_s": nominal["provenance_transfer"],
-            "denib": raw["denib"]["provenance"],
+            "clean_gun": raw["clean_gun"]["provenance"],
         },
     )
 
@@ -232,6 +232,36 @@ def load_spray_config(path: Path | None = None) -> SprayConfig:
         approach_v=float(motion["movel_spray_approach"]["v"]),
         height_a=float(motion["movel_process"]["a"]),
         height_v=float(motion["movel_process"]["v"]),
+    )
+
+
+@dataclass(frozen=True, slots=True)
+class BrushConfig:
+    """Tuned gun-clean constants (cell-config). The HVLP tip contacts the
+    rotating brush (legacy coil 108) to stay clean before a coat — NOT a product
+    denib. Non-force: contact-detect, back off, hold while the brush spins.
+    """
+
+    contact_v: float          # base-Z+ contact search speed (movel_process)
+    retract_off_mm: float     # back off the hard-contact point before the brush
+    retract_a: float          # movel_retract_brush
+    retract_v: float
+    settle_before_on_s: float
+    duration_s: float         # brush run time (legacy Thread_2 kill at 30 s)
+    settle_after_off_s: float
+
+
+def load_brush_config(path: Path | None = None) -> BrushConfig:
+    raw = _load(path or CELL_CONFIG)
+    moves, motion, timings = raw["moves"], raw["motion"], raw["timings"]
+    return BrushConfig(
+        contact_v=float(motion["movel_process"]["v"]),
+        retract_off_mm=float(moves["brush_clean"]["retract_off_mm"]),
+        retract_a=float(motion["movel_retract_brush"]["a"]),
+        retract_v=float(motion["movel_retract_brush"]["v"]),
+        settle_before_on_s=float(timings["brush_settle_before_on_s"]),
+        duration_s=float(timings["brush_duration_s"]),
+        settle_after_off_s=float(timings["brush_settle_after_off_s"]),
     )
 
 

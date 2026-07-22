@@ -8,7 +8,7 @@
 --ur HOST   Full hardware: REAL ClearCore (--cc-host, default CLEARCORE_HOST)
             + REAL UR5e at HOST via ur_rtde (Linux/WSL2 only; the arm must
             already be in Remote control mode). sand + conveyor are live;
-            spray/denib are not yet implemented (URRobot raises), so a full
+            spray/clean_gun are not yet implemented (URRobot raises), so a full
             schedule run awaits the Sprayer composite — this mode is for
             robot/conveyor bring-up until then.
 
@@ -43,7 +43,7 @@ def _build_sim(cfg):
 
     cfg = replace(
         cfg, flash_seconds=10.0, spray_burst_pause_s=2.0, transfer_s=1.0,
-        robot_coat1_s=4.0, robot_coat2_s=3.0, denib_duration_s=1.0,
+        robot_coat1_s=4.0, robot_coat2_s=3.0, clean_gun_duration_s=1.0,
     )
     fake = FakeClearCore(port=15030, watchdog_timeout_s=3.0, shutter_actuation_s=0.3).start()
     physics = PhysicsSim(fake, in_count=0, transfer_s=1.0).start()
@@ -61,6 +61,13 @@ def main() -> None:
                       help="real ClearCore + real UR5e at UR_HOST (needs ur_rtde: Linux/WSL2)")
     ap.add_argument("--cc-host", default=None,
                     help="ClearCore host for --ur (default: registers.CLEARCORE_HOST)")
+    ap.add_argument("--flash-seconds", type=float, default=None,
+                    help="override process flash_seconds (bench/testing — e.g. 8 to "
+                         "compress the 180 s flash while manually triggering sensors)")
+    ap.add_argument("--bench", action="store_true",
+                    help="bench manual-sensor testing (real ClearCore only): stub the "
+                         "shutter as follows-command (no end-switches wired yet) and "
+                         "loosen the train post-shift verify to human pace")
     ap.add_argument("--port", type=int, default=8000)
     ap.add_argument(
         "--state-file", default="var/line-state.json",
@@ -68,44 +75,53 @@ def main() -> None:
              "confirm-and-resume flow (default: %(default)s)",
     )
     args = ap.parse_args()
+    if args.bench and args.sim:
+        ap.error("--bench applies to real hardware (--cc/--ur), not --sim")
 
     cfg = load_process_config()
+    if args.flash_seconds is not None:
+        cfg = replace(cfg, flash_seconds=args.flash_seconds)
     physics = None
     if args.sim:
         cfg, cc, robot, physics = _build_sim(cfg)
         print("simulated line: fake ClearCore + physics + fake robot (compressed times)")
     elif args.cc:
-        cc = ClearCoreClient(args.cc).connect()
+        cc = ClearCoreClient(args.cc, stub_shutter=args.bench).connect()
         robot = FakeRobot(work_s=5.0, spray_s=5.0)
         print(f"conveyor commissioning: real ClearCore at {args.cc}, FAKE robot")
     else:  # --ur: real ClearCore + real UR5e (needs ur_rtde on this host)
         from ..config.loader import (
-            load_products, load_robot_setup, load_sand_config, load_spray_config,
+            load_brush_config, load_products, load_robot_setup, load_sand_config,
+            load_spray_config,
         )
         from ..devices.registers import CLEARCORE_HOST
         from ..devices.ur import Dashboard, URClient
+        from .gun_clean import GunClean
         from .robot_ur import URRobot
         from .sander import Sander
         from .sprayer import Sprayer
 
         cc_host = args.cc_host or CLEARCORE_HOST
-        cc = ClearCoreClient(cc_host).connect()
+        cc = ClearCoreClient(cc_host, stub_shutter=args.bench).connect()
         print(f"FULL HARDWARE: real ClearCore at {cc_host}, real UR5e at {args.ur}")
         Dashboard(args.ur).connect().power_on_and_release()  # bring the arm to RUNNING
         ur = URClient(args.ur, load_robot_setup())           # RTDE; sets TCP + payload
         sander = Sander(ur, cc, load_sand_config())
         sprayer = Sprayer(ur, cc, load_spray_config())
+        gun_clean = GunClean(ur, cc, load_brush_config())
         products = load_products()
         # Resolver reads live part identity from the supervisor (built just
-        # below); late-bound, so it resolves at sand/spray time.
+        # below); late-bound, so it resolves at operation time.
         robot = URRobot(
-            ur, sander, sprayer,
+            ur, sander, sprayer, gun_clean,
             lambda pid: products[supervisor.state.parts[pid].product.value],
         )
 
     from ..process.persistence import StateStore
 
-    executor = Executor(cc, robot, TrainMover(cc))
+    if args.bench:
+        print("BENCH: shutter stubbed (follows command); train post-shift verify -> 30 s")
+    executor = Executor(cc, robot, TrainMover(cc, post_shift_timeout_s=30.0 if args.bench else 2.0))
     supervisor = Supervisor(cc=cc, robot=robot, executor=executor, cfg=cfg, state=LineState())
     store = StateStore(args.state_file)
     controller = LineController(supervisor, executor, store=store).start()

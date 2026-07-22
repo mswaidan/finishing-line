@@ -40,6 +40,13 @@
 
 // ---------------------------------------------------------------- inputs
 // All presence eyes NPN, debounced in firmware — edges stop belts.
+//
+// Polarity: the F18 diffuse eyes read ACTIVE-LOW as wired (product present pulls
+// the input low), so the firmware inverts every presence/handoff eye to make the
+// discrete register mean "present". Set false if the eyes are taught light-on.
+// The shutter end-switches are separate mechanical inputs and are NOT inverted.
+#define EYES_ACTIVE_LOW true
+
 #define PIN_F1_EYE ConnectorIO0        // TODO(wiring)
 #define PIN_O_EYE ConnectorIO1         // TODO(wiring)
 #define PIN_F2_EYE ConnectorDI6        // TODO(wiring)

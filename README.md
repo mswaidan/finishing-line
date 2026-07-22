@@ -117,7 +117,7 @@ interlocks, and fault rules the plain-language story above describes).
 | 3 | Device drivers | **done vs sims** — RTDE verified on URSim; real-robot motion awaits hardware |
 | 4 | Motion primitives | executor/train/supervisor done; force-mode sanding awaits hardware window |
 | 5 | FastAPI / HMI | **done** — `python -m finishing_line.api --sim` |
-| 6 | Commissioning | firmware ready to flash — [`firmware/`](firmware/README.md) |
+| 6 | Commissioning | **in progress** — ordered bring-up plan in [`docs/commissioning.md`](docs/commissioning.md); firmware flashed, sensors + robot comms validated |
 
 108 tests, all runnable with zero hardware, on Windows and Linux.
 

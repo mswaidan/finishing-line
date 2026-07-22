@@ -134,8 +134,8 @@ def test_restart_mid_flash_and_finish_the_batch(tmp_path):
 
     cfg = ProcessConfig(
         flash_seconds=1.5, coats=2, spray_burst_pause_s=0.25, transfer_s=0.25,
-        robot_coat1_s=0.5, robot_coat2_s=0.5, denib_enabled=True,
-        denib_duration_s=0.2, provenance={},
+        robot_coat1_s=0.5, robot_coat2_s=0.5, clean_gun_enabled=True,
+        clean_gun_duration_s=0.2, provenance={},
     )
     store_path = tmp_path / "state.json"
     fake = FakeClearCore(port=15027, watchdog_timeout_s=5.0, shutter_actuation_s=0.05).start()

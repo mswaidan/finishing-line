@@ -15,7 +15,7 @@ from dataclasses import dataclass, field, replace
 from ..config.loader import ProcessConfig
 from ..core.intents import (
     AdvanceTrain,
-    DenibPart,
+    CleanGun,
     HaltZones,
     Intent,
     MoveToSafePose,
@@ -65,8 +65,8 @@ class FakeLine:
         match intent:
             case SandPart():
                 return self.cfg.robot_coat1_s - 30.0
-            case DenibPart():
-                return self.cfg.denib_duration_s
+            case CleanGun():
+                return self.cfg.clean_gun_duration_s
             case SprayPart():
                 return 30.0
             case AdvanceTrain():
@@ -83,7 +83,7 @@ class FakeLine:
             case SprayPart():
                 self.gun_on = True
                 self.robot_clear = False
-            case SandPart() | DenibPart():
+            case SandPart() | CleanGun():
                 self.robot_clear = False
             case SetShutter():
                 self.shutter = ShutterState.MOVING
