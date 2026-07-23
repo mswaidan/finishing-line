@@ -37,8 +37,18 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from ..config.loader import ConveyorKinematics, load_conveyor_kinematics
+from ..config.loader import (
+    ConveyorKinematics,
+    load_conveyor_kinematics,
+    load_legacy_sensor_inversion,
+)
 from .registers import Command, Echo, Status
+
+_SENSOR_ADDR = {
+    "work_at_zero": Status.WORK_AT_ZERO,
+    "offload": Status.OFFLOAD,
+    "onload": Status.ONLOAD,
+}
 
 try:
     from pymodbus.client import ModbusTcpClient
@@ -79,6 +89,7 @@ class LegacyClearCoreClient:
         poll_s: float = 0.02,
         echo_timeout_s: float = 3.0,
         kinematics: ConveyorKinematics | None = None,
+        invert_sensors: dict[str, bool] | None = None,
     ) -> None:
         if ModbusTcpClient is None:
             raise LegacyClearCoreError("pymodbus is not installed")
@@ -87,8 +98,22 @@ class LegacyClearCoreClient:
         self._poll_s = poll_s
         self._echo_timeout_s = echo_timeout_s
         self.kinematics = kinematics or load_conveyor_kinematics()
+        # Per-sensor polarity (line-config legacy_mode.sensor_polarity): the
+        # legacy firmware serves raw reads, so mixed sensor fleets (original
+        # active-high eyes + F18 replacements, active-low by default) get
+        # normalized HERE — True always means part present, everywhere above.
+        if invert_sensors is None:
+            invert_sensors = load_legacy_sensor_inversion()
+        self._invert = {
+            _SENSOR_ADDR[name]: flag for name, flag in invert_sensors.items()
+        }
         self._request_id = 0
         self._params_pushed = False
+
+    def _sensor(self, addr: int) -> bool:
+        """A sensor read normalized to True = part present."""
+        raw = self._read_discrete(addr)
+        return (not raw) if self._invert.get(addr, False) else raw
 
     # ------------------------------------------------------------- lifecycle
 
@@ -289,7 +314,7 @@ class LegacyClearCoreClient:
                     wz_phases += ["depart_hi", "depart_lo"]
                 wz_phases += ["arrive_hi"] + (["arrive_lo"] if pass_through else [])
             if feed:
-                on_prev = self._read_discrete(Status.ONLOAD)
+                on_prev = self._sensor(Status.ONLOAD)
                 if on_prev:  # enterer already aboard (pre-staged) — nothing to board
                     entered = True
                     self.set_feed(False)
@@ -302,7 +327,7 @@ class LegacyClearCoreClient:
                         f"timeout in transition move ({nominal_mm:+.0f} mm nominal)"
                     )
                 if wz_phases:
-                    wz = self._read_discrete(Status.WORK_AT_ZERO)
+                    wz = self._sensor(Status.WORK_AT_ZERO)
                     ph = wz_phases[0]
                     if (ph.endswith("hi") and wz) or (ph.endswith("lo") and not wz):
                         wz_phases.pop(0)
@@ -310,7 +335,7 @@ class LegacyClearCoreClient:
                             arrived = True
                             self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
                 if feed and not entered:
-                    on = self._read_discrete(Status.ONLOAD)
+                    on = self._sensor(Status.ONLOAD)
                     if on and not on_prev:  # first rising edge: aboard — cut NOW
                         entered = True
                         self.set_feed(False)
@@ -325,7 +350,7 @@ class LegacyClearCoreClient:
                 _s, _t = self._start_move(reapproach_cap_mm)
                 arrived = False
                 while time.monotonic() < deadline + 15.0:
-                    if self._read_discrete(Status.WORK_AT_ZERO):
+                    if self._sensor(Status.WORK_AT_ZERO):
                         arrived = True
                         self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
                     if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
@@ -389,7 +414,7 @@ class LegacyClearCoreClient:
         try:
             deadline = time.monotonic() + feed_timeout_s
             while time.monotonic() < deadline:
-                if self._read_discrete(Status.ONLOAD):
+                if self._sensor(Status.ONLOAD):
                     return {"staged": True, "nudged": False, "nudge_s": 0.0}
                 time.sleep(self._poll_s)
             if not nudge:
@@ -402,7 +427,7 @@ class LegacyClearCoreClient:
             try:
                 deadline = time.monotonic() + nudge_timeout_s
                 while time.monotonic() < deadline:
-                    if self._read_discrete(Status.ONLOAD):
+                    if self._sensor(Status.ONLOAD):
                         return {"staged": True, "nudged": True,
                                 "nudge_s": time.monotonic() - t0}
                     if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
@@ -426,7 +451,7 @@ class LegacyClearCoreClient:
     def read_inputs(self) -> LegacyInputs:
         return LegacyInputs(
             server_state=self._read_input_reg(Status.SERVER_STATE),
-            work_at_zero=self._read_discrete(Status.WORK_AT_ZERO),
-            offload=self._read_discrete(Status.OFFLOAD),
-            onload=self._read_discrete(Status.ONLOAD),
+            work_at_zero=self._sensor(Status.WORK_AT_ZERO),
+            offload=self._sensor(Status.OFFLOAD),
+            onload=self._sensor(Status.ONLOAD),
         )

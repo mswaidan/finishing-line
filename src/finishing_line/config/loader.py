@@ -281,6 +281,19 @@ def load_legacy_fans(path: Path | None = None) -> dict[str, FanMode]:
     return fans
 
 
+def load_legacy_sensor_inversion(path: Path | None = None) -> dict[str, bool]:
+    """Which legacy sensors read inverted (part present = LOW), by name
+    (work_at_zero / offload / onload). Sparse config: unlisted = active_high.
+    """
+    raw = _load(path or LINE_CONFIG)["legacy_mode"].get("sensor_polarity", {})
+    inversion: dict[str, bool] = {}
+    for name, polarity in raw.items():
+        if polarity not in ("active_high", "active_low"):
+            raise ValueError(f"unknown sensor polarity for {name}: {polarity!r}")
+        inversion[name] = polarity == "active_low"
+    return inversion
+
+
 def load_brush_config(path: Path | None = None) -> BrushConfig:
     raw = _load(path or CELL_CONFIG)
     moves, motion, timings = raw["moves"], raw["motion"], raw["timings"]

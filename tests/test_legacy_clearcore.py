@@ -33,7 +33,8 @@ V = 6000  # test velocity: fast moves, still wide enough windows to poke sensors
 @pytest.fixture()
 def rig():
     fake = FakeLegacyClearCore(port=PORT).start()
-    cc = LegacyClearCoreClient("127.0.0.1", port=PORT, poll_s=0.005).connect()
+    cc = LegacyClearCoreClient("127.0.0.1", port=PORT, poll_s=0.005,
+                               invert_sensors={}).connect()
     cc.set_params(V, 60000)
     timers: list[threading.Timer] = []
 
@@ -47,6 +48,29 @@ def rig():
         t.cancel()
     cc.close()
     fake.stop()
+
+
+def test_sensor_polarity_inversion_normalizes_mixed_fleets(rig):
+    """An F18 replacement eye reads inverted (empty = HI); the driver
+    normalizes per line-config so True always means part present — including
+    inside the edge chains, which read through the same helper."""
+    fake, _cc, _poke = rig
+    cc2 = LegacyClearCoreClient("127.0.0.1", port=PORT, poll_s=0.005,
+                                invert_sensors={"offload": True}).connect()
+    try:
+        # Raw LOW (F18 idle state on an inverted eye) => normalized "present"?
+        # No: F18 empty = HI = raw True => normalized False. Part = LO => True.
+        fake.set_sensor("offload", True)   # raw HI = F18 sees NOTHING
+        assert cc2.read_inputs().offload is False
+        fake.set_sensor("offload", False)  # raw LO = part present
+        assert cc2.read_inputs().offload is True
+        # Unlisted sensors stay active-high.
+        fake.set_sensor("onload", True)
+        assert cc2.read_inputs().onload is True
+    finally:
+        cc2.close()
+        fake.set_sensor("offload", False)
+        fake.set_sensor("onload", False)
 
 
 def test_params_are_pushed_and_echoed(rig):

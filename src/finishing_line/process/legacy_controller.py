@@ -99,6 +99,9 @@ class LegacyController:
         seq = self._seq
         data = {
             "declared": seq.declared,
+            "minted": seq.minted,
+            "pair": seq._pair,
+            "intake_product": seq.intake_product,
             "beat": seq.beat,
             "queue": list(seq.queue),
             "completed": list(seq.completed),
@@ -121,6 +124,9 @@ class LegacyController:
         data = json.loads(self._path.read_text(encoding="utf-8"))
         seq = self._seq
         seq.declared = data["declared"]
+        seq.minted = data.get("minted", 0)
+        seq._pair = data.get("pair", -1)
+        seq.intake_product = data.get("intake_product", seq.intake_product)
         seq.beat = data["beat"]
         seq.queue = list(data["queue"])
         seq.completed = list(data["completed"])
@@ -148,6 +154,11 @@ class LegacyController:
     def declare_batch(self, product: str, part_ids: list[str]) -> list[str]:
         return self._seq.declare_batch(product, part_ids)
 
+    def set_product(self, product: str) -> None:
+        """Continuous intake: what the line is running right now (auto-minted
+        part identities take this product until it changes)."""
+        self._seq.set_intake_product(product)
+
     def ack_fault(
         self,
         confirmed_occupancy: dict[str, str] | None = None,
@@ -174,6 +185,7 @@ class LegacyController:
         sensors = seq.sensors
         return {
             "mode": "legacy",
+            "intake_product": seq.intake_product,
             "enabled": self._enabled,
             "beat": seq.beat,
             "phase": seq.phase,

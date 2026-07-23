@@ -78,6 +78,7 @@
     <select id="batch-product"><option>cube</option><option>browser</option></select>
     <input id="batch-count" type="number" min="1" max="8" value="4" style="width:70px">
     <button id="btn-batch">Stage at INQ</button>
+    <button id="btn-intake" style="display:none">set intake product</button>
     <span class="meta" id="batch-result"></span>
   </div>
 </section>
@@ -106,8 +107,12 @@ function render(s){
   latest = s;
   $("beat").textContent = s.beat;
   $("phase").textContent = s.phase;
-  if (s.mode === "legacy") $("shutter").style.display = "none";
-  else $("shutter").textContent = "shutter " + (s.clearcore.shutter ?? "?").toLowerCase();
+  if (s.mode === "legacy") {
+    $("shutter").style.display = "none";
+    $("btn-intake").style.display = "";
+    $("btn-batch").textContent = "queue named ids (optional)";
+    $("btn-intake").textContent = "set intake product (now: " + (s.intake_product ?? "?") + ")";
+  } else $("shutter").textContent = "shutter " + (s.clearcore.shutter ?? "?").toLowerCase();
   $("btn-run").classList.toggle("on", s.enabled);
 
   const banner = $("banner");
@@ -162,6 +167,12 @@ async function post(url, body){
 $("btn-run").onclick   = () => post("/run", {enabled:true});
 $("btn-pause").onclick = () => post("/run", {enabled:false});
 $("btn-halt").onclick  = () => confirm("Halt the line?") && post("/halt", {reason:"operator halt (HMI)"});
+$("btn-intake").onclick = async () => {
+  try {
+    const r = await post("/product", {product: $("batch-product").value});
+    $("batch-result").textContent = "intake product: " + r.intake_product;
+  } catch(e){ $("batch-result").textContent = e.message; }
+};
 $("btn-batch").onclick = async () => {
   try {
     const res = await post("/batch", {product: $("batch-product").value,

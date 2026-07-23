@@ -45,9 +45,10 @@ class LegacyTrain:
         return self._record(self._cc.transition_move(
             self._load_mm, stop_on_work_zero=True, feed=True))
 
-    def stage(self) -> dict:
-        """JIT staging: feed-only bulk, sensor-stopped belt nudge on stall."""
-        return self._cc.stage_next()
+    def stage(self, **kwargs) -> dict:
+        """JIT staging: feed-only bulk, sensor-stopped belt nudge on stall.
+        kwargs pass through (feed_timeout_s for the long idle-intake window)."""
+        return self._cc.stage_next(**kwargs)
 
     def entry(self, *, o_occupied: bool, feed_assist: bool = False) -> dict:
         """Staged enterer rides eye -> O. feed_assist only if staging failed

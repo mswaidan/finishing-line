@@ -37,6 +37,7 @@ class FakeTrain:
         self.log: list[str] = []
         self.offload = False
         self.arrive = True
+        self.available = 0  # physical parts at the infeed (the sensors' truth)
         self.stage_result = {"staged": True, "nudged": False, "nudge_s": 0.0}
         self.last_spacing_mm = 700.0
 
@@ -47,9 +48,13 @@ class FakeTrain:
         self.log.append("load")
         return self._res()
 
-    def stage(self):
+    def stage(self, **_kw):
         self.log.append("stage")
-        return dict(self.stage_result)
+        res = dict(self.stage_result)
+        res["staged"] = res["staged"] and self.available > 0
+        if res["staged"]:
+            self.available -= 1
+        return res
 
     def entry(self, *, o_occupied, feed_assist=False):
         self.log.append(f"entry(assist={feed_assist})")
@@ -74,10 +79,13 @@ class FakeTrain:
                                onload=False, offload=self.offload)
 
 
-def make_seq(fans=ALWAYS_ON, fan_do=None, robot=None, train=None):
+def make_seq(fans=ALWAYS_ON, fan_do=None, robot=None, train=None,
+             continuous=True, parts_available=99):
     train = train or FakeTrain()
+    train.available = parts_available
     robot = robot or FakeRobot(work_s=0.005, spray_s=0.005, retract_s=0.0)
-    seq = LegacySequencer(train, robot, CFG, fans, fan_do=fan_do, tick_s=0.005)
+    seq = LegacySequencer(train, robot, CFG, fans, fan_do=fan_do, tick_s=0.005,
+                          continuous_intake=continuous)
     return seq, train, robot
 
 
@@ -92,7 +100,7 @@ def run_until(seq, predicate, timeout_s=15.0):
 
 
 def test_four_part_soak_completes_in_order_never_underflashed():
-    seq, train, robot = make_seq()
+    seq, train, robot = make_seq(parts_available=4)
     seq.declare_batch("cube", ["L1", "T1", "L2", "T2"])
     run_until(seq, lambda s, b: len(s.completed) == 4 and s.phase == PHASE_IDLE,
               timeout_s=30.0)
@@ -107,14 +115,14 @@ def test_four_part_soak_completes_in_order_never_underflashed():
         ("spray1", "L1"), ("spray1", "T1"), ("spray2", "L1"), ("spray2", "T1"),
         ("spray1", "L2"), ("spray1", "T2"), ("spray2", "L2"), ("spray2", "T2"),
     ]
-    # Direct entry: exactly one load; T1/L2/T2 entered via staged entries.
-    assert train.log.count("load") == 1
-    assert sum(1 for e in train.log if e.startswith("entry")) == 3
+    # Direct entry everywhere: idle intake + 3 in-pattern entries, no load.
+    assert train.log.count("load") == 0
+    assert sum(1 for e in train.log if e.startswith("entry")) == 4
     assert train.log.count("retreat") == 2 and train.log.count("return") == 2
 
 
 def test_flash_gate_blocks_the_retreat_until_banked():
-    seq, train, _robot = make_seq()
+    seq, train, _robot = make_seq(parts_available=2)
     seq.declare_batch("cube", ["L1", "T1"])
     blocked = run_until(seq, lambda s, b: b is not None and "flash" in b)
     assert "L1" in blocked and "F2" in blocked
@@ -142,7 +150,7 @@ def test_p3_spray_pause_with_controllable_f1_fan():
         robot.log.append((f"fan_{'on' if on else 'off'}", str(do)))
 
     fans = {"f1": FanMode("robot_do", do=2), "f2": FanMode("always_on")}
-    seq, train, robot = make_seq(fans=fans, fan_do=fan_do, robot=robot)
+    seq, train, robot = make_seq(fans=fans, fan_do=fan_do, robot=robot, parts_available=2)
     seq.declare_batch("cube", ["L1", "T1"])
     run_until(seq, lambda s, b: len(s.completed) == 2 and s.phase == PHASE_IDLE,
               timeout_s=30.0)
@@ -155,23 +163,25 @@ def test_p3_spray_pause_with_controllable_f1_fan():
 
 def test_always_on_fans_never_toggle():
     fan_log: list = []
-    seq, _train, _robot = make_seq(fan_do=lambda do, on: fan_log.append((do, on)))
+    seq, _train, _robot = make_seq(fan_do=lambda do, on: fan_log.append((do, on)), parts_available=2)
     seq.declare_batch("cube", ["L1", "T1"])
     run_until(seq, lambda s, b: len(s.completed) == 2, timeout_s=30.0)
     assert fan_log == []
 
 
 def test_staging_failure_faults_and_idles_the_belt():
-    seq, train, _robot = make_seq()
+    # Batch mode: declared parts that never appear ARE a fault. (Continuous
+    # mode skips instead — covered by the starved-line test.)
+    seq, train, _robot = make_seq(continuous=False, parts_available=2)
     train.stage_result = {"staged": False, "nudged": True, "nudge_s": 1.0}
     seq.declare_batch("cube", ["L1", "T1"])
     run_until(seq, lambda s, b: s.phase == PHASE_FAULTED)
-    assert "staging failed" in seq.fault
+    assert "not found at the infeed" in seq.fault or "staging failed" in seq.fault
     assert train.log[-1] == "idle"
 
 
 def test_lone_part_drains_with_both_coats():
-    seq, train, _robot = make_seq()
+    seq, train, _robot = make_seq(parts_available=1)
     seq.declare_batch("cube", ["L1"])
     run_until(seq, lambda s, b: s.completed == ["L1"] and s.phase == PHASE_IDLE,
               timeout_s=30.0)
@@ -181,8 +191,50 @@ def test_lone_part_drains_with_both_coats():
     assert "retreat" in train.log, "lone part still retreats for coat 2"
 
 
+def test_continuous_intake_mints_beat_derived_identities():
+    """No batching: parts appear because the sensors deliver them. Identities
+    are minted, roles come from the beat (idle/P4 entry = LEAD, P1 = TRAIL)."""
+    seq, _train, _robot = make_seq(parts_available=2)
+    run_until(seq, lambda s, b: len(s.completed) == 2 and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.completed == ["c0001", "c0002"]
+    assert str(seq.parts["c0001"].role) == "lead"
+    assert str(seq.parts["c0002"].role) == "trail"
+    assert all(str(p.product) == "cube" for p in seq.parts.values())
+    assert seq.fault is None
+
+
+def test_starved_line_skips_drains_and_resumes():
+    """Skip-and-drain: an empty infeed at an entry beat skips the entry (no
+    fault), in-flight parts finish, and the line resumes when parts appear."""
+    seq, train, _robot = make_seq(parts_available=1)
+    run_until(seq, lambda s, b: s.completed == ["c0001"] and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.fault is None, "starvation must never fault"
+    p = seq.parts["c0001"]
+    assert p.coats_applied == 2
+    assert p.flash_1_s >= CFG.flash_seconds and p.flash_2_s >= CFG.flash_seconds
+    # Parts arrive later in the day: the idle intake picks them up.
+    train.available = 2
+    run_until(seq, lambda s, b: len(s.completed) == 3 and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.completed == ["c0001", "c0002", "c0003"]
+    assert seq.fault is None
+
+
+def test_intake_product_switch_changes_minted_parts():
+    seq, train, _robot = make_seq(parts_available=1)
+    run_until(seq, lambda s, b: len(s.completed) == 1, timeout_s=30.0)
+    seq.set_intake_product("browser")
+    train.available = 1
+    run_until(seq, lambda s, b: len(s.completed) == 2 and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.completed[1] == "b0002"
+    assert str(seq.parts["b0002"].product) == "browser"
+
+
 def test_controller_halt_at_boundary_and_snapshot_shape(tmp_path):
-    seq, train, _robot = make_seq()
+    seq, train, _robot = make_seq(parts_available=2)
     ctl = LegacyController(seq, CFG, state_file=str(tmp_path / "s.json")).start()
     try:
         ctl.declare_batch("cube", ["L1", "T1"])

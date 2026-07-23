@@ -36,6 +36,10 @@ class HaltRequest(BaseModel):
     reason: str = "operator halt"
 
 
+class ProductRequest(BaseModel):
+    product: str = Field(pattern="^(cube|browser)$")
+
+
 class FaultAckRequest(BaseModel):
     #: station name (IF/S/FD) -> part id; omit to accept current belief
     occupancy: dict[str, str] | None = None
@@ -79,6 +83,14 @@ def create_app(controller: LineController) -> FastAPI:
         except ValueError as exc:
             raise HTTPException(409, str(exc)) from exc
         return {"staged": staged}
+
+    @app.post("/product")
+    def product(req: ProductRequest) -> dict:
+        """Continuous-intake product switch (legacy mode only)."""
+        if not hasattr(controller, "set_product"):
+            raise HTTPException(409, "this mode batches by declaration, not intake")
+        controller.set_product(req.product)
+        return {"intake_product": req.product}
 
     @app.post("/fault/ack")
     def fault_ack(req: FaultAckRequest) -> dict:

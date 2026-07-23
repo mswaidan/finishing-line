@@ -112,6 +112,16 @@ legacy_mode:
     f1: always_on
     f2: always_on
 
+  # Per-sensor polarity on the legacy ClearCore (raw reads, no firmware
+  # inversion available). active_high = part present reads HI (the original
+  # legacy sensors); active_low = part present reads LO (the F18 eyes'
+  # factory default — light-on). Unlisted sensors are active_high.
+  # offload swapped to an F18 2026-07-24 after the original failed.
+  # NOTE: if an eye is later TAUGHT to dark-on, flip its entry back to
+  # active_high or the inversion doubles up.
+  sensor_polarity:
+    offload: active_low
+
 watchdog:
   # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side
   # timeout must live in firmware, not here — if the orchestrator is the thing

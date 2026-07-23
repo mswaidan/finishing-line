@@ -55,6 +55,8 @@ class LegacySequencer:
         fans: dict[str, FanMode],
         *,
         fan_do: Callable[[int, bool], None] | None = None,
+        continuous_intake: bool = True,
+        intake_product: str = "cube",
         tick_s: float = 0.2,
         on_change: Callable[[], None] | None = None,
     ) -> None:
@@ -71,6 +73,14 @@ class LegacySequencer:
         self.queue: list[str] = []
         self.completed: list[str] = []
         self.declared = 0
+        # Continuous intake: the line runs all day; parts are anonymous until
+        # the infeed sensors deliver one, then an identity is MINTED. Declared
+        # ids (the batch panel, still useful for testing) are consumed first.
+        self._continuous = continuous_intake
+        self.intake_product = intake_product
+        self.minted = 0
+        self._pair = -1
+        self._pending_enterer: str | None = None
         self.beat: str = BEATS[0]
         self.phase: str = PHASE_IDLE
         self.fault: str | None = None
@@ -159,19 +169,47 @@ class LegacySequencer:
             return self._step_transition()
         raise AssertionError(self.phase)
 
+    def _mint(self, role: PartRole) -> str:
+        """Continuous intake: identity is created when the sensors deliver a
+        physical part. Roles derive from the BEAT (P4/idle entry = LEAD,
+        P1 entry = TRAIL), so holes in the pattern can never break pairing."""
+        prod = Product(self.intake_product)
+        self.minted += 1
+        pid = f"{self.intake_product[0]}{self.minted:04d}"
+        if role is PartRole.LEAD:
+            self._pair += 1
+        self.parts[pid] = PartState(
+            part_id=pid, product=prod, role=role, pair_index=max(self._pair, 0))
+        self._on_change()
+        return pid
+
+    def set_intake_product(self, product: str) -> None:
+        Product(product)  # validate
+        self.intake_product = product
+        self._on_change()
+
     def _step_idle(self) -> str | None:
         if self.occ:
             # Restored/odd state: parts on the belt while idle is a controller
             # decision (confirm-or-clear), never something to run through.
             time.sleep(self._tick_s)
             return "parts on the line — confirm occupancy or clear before running"
-        if not self.queue:
+        if not self.queue and not self._continuous:
             time.sleep(self._tick_s)
             return "line empty — declare a batch to begin"
-        res = self._train.load()
-        if not res.get("arrived"):
-            return self._fault("load never reached work-zero — check queue/feed")
-        self.occ[Station.O] = self.queue.pop(0)
+        # Intake attempt: the feed runs (long window at idle — this IS the
+        # "feed runs continuously when the belt is empty" behavior), and the
+        # nudge doubles as the jam-clearer, so a miss genuinely means empty.
+        res = self._train.stage(feed_timeout_s=25.0)
+        if not res["staged"]:
+            if not self._continuous:
+                return self._fault("declared parts not found at the infeed")
+            return "waiting for parts at the infeed (feed running)"
+        enterer = self.queue.pop(0) if self.queue else self._mint(PartRole.LEAD)
+        r = self._train.entry(o_occupied=False)
+        if not r.get("arrived"):
+            return self._fault("intake entry never reached work-zero")
+        self.occ[Station.O] = enterer
         self.beat = BEATS[0]
         self.phase = PHASE_ROBOT
         self.sensors = self._train.sensors()
@@ -183,10 +221,10 @@ class LegacySequencer:
         pid = self.occ.get(Station.O)
         if pid is not None:
             part = self.parts[pid]
-            if part.role is not spec.robot.role:
-                return self._fault(
-                    f"beat {self.beat} expects {spec.robot.role} at O, found "
-                    f"{part.role} ({pid})")
+            # No role-mismatch fault: with skip-and-drain holes, roles are
+            # descriptive. The real guard is coat idempotence — a part only
+            # receives the beat's coat if it NEEDS it; a mismatched part just
+            # waits a beat (over-flash is safe by design, §6).
             if part.coats_applied < spec.robot.coat:
                 try:
                     if spec.robot.clean_gun:
@@ -224,7 +262,7 @@ class LegacySequencer:
         if blocked:
             time.sleep(self._tick_s)
             return blocked
-        entry = self.beat in _ENTRY_BEATS and bool(self.queue)
+        entry = self.beat in _ENTRY_BEATS and (bool(self.queue) or self._continuous)
         self.phase = PHASE_STAGE if entry else PHASE_TRANSITION
         return None
 
@@ -254,12 +292,25 @@ class LegacySequencer:
     def _step_stage(self) -> str | None:
         res = self._train.stage()
         if not res["staged"]:
-            return self._fault("staging failed (feed + nudge) — check the junction")
+            if not self._continuous:
+                return self._fault("staging failed (feed + nudge) — check the junction")
+            # SKIP-AND-DRAIN: the nudge is the jam-discriminator (anything
+            # mid-junction surfaces within its cap), so a double-miss means
+            # the infeed is genuinely empty. No enterer this beat; in-flight
+            # parts continue and the line refills whenever parts appear.
+            self.stage_note = "no part at the infeed — entry skipped"
+            self._pending_enterer = None
+            self._staged_ok = False
+            self.phase = PHASE_TRANSITION
+            return None
         if res["nudged"]:
             mmps = 53.0
             self.stage_note = f"staged via nudge ~{res['nudge_s'] * mmps:.0f} mm"
         else:
             self.stage_note = "staged (feed only)"
+        role = PartRole.TRAIL if self.beat == "P1" else PartRole.LEAD
+        self._pending_enterer = (
+            self.queue.pop(0) if self.queue else self._mint(role))
         self._staged_ok = True
         self.phase = PHASE_TRANSITION
         return None
@@ -268,7 +319,7 @@ class LegacySequencer:
         beat = self.beat
         try:
             if beat in _ENTRY_BEATS:
-                if self.queue:
+                if self._pending_enterer is not None:
                     if self.occ.get(Station.F1):
                         return self._fault(
                             "F1 occupied at an entry beat — impossible occupancy")
@@ -278,7 +329,8 @@ class LegacySequencer:
                     self._staged_ok = False
                     if not res.get("arrived"):
                         return self._fault("entry never reached work-zero")
-                    self._shift_downstream(enterer=self.queue.pop(0))
+                    enterer, self._pending_enterer = self._pending_enterer, None
+                    self._shift_downstream(enterer=enterer)
                 elif self.occ:
                     self._train.blind()
                     self._shift_downstream(enterer=None)
