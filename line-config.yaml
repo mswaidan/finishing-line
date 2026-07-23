@@ -98,6 +98,20 @@ pairing:
   # blocking: see core/pairing.py.
   policy: same_product   # same_product | any | browsers_in_dedicated_blocks
 
+legacy_mode:
+  # Fan control for the legacy-mod route (docs/legacy-mod-choreography.md).
+  # Modes per fan:
+  #   always_on        hardwired/manual — flash banks wall-clock (parity with
+  #                    today's line); P3 spray-pause impossible (noted in HMI)
+  #   none             fan not mounted (flash banks wall-clock + loud warning)
+  #   {robot_do: N}    relay on robot digital output N — full schedule
+  #                    semantics incl. the P3 burst pause
+  # Both fans are hardwired always-on until the relays arrive (ordered
+  # 2026-07-23); flip to {robot_do: N} per fan when installed — config only.
+  fans:
+    f1: always_on
+    f2: always_on
+
 watchdog:
   # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side
   # timeout must live in firmware, not here — if the orchestrator is the thing

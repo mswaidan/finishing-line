@@ -251,6 +251,36 @@ class BrushConfig:
     settle_after_off_s: float
 
 
+@dataclass(frozen=True, slots=True)
+class FanMode:
+    """Legacy-mod fan control mode (line-config legacy_mode.fans).
+
+    kind: 'always_on' (hardwired — flash banks wall-clock), 'none' (not
+    mounted — wall-clock + loud warning), or 'robot_do' (relay on a robot
+    digital output — full schedule semantics incl. the P3 burst pause).
+    """
+
+    kind: str
+    do: int | None = None
+
+    @property
+    def controllable(self) -> bool:
+        return self.kind == "robot_do"
+
+
+def load_legacy_fans(path: Path | None = None) -> dict[str, FanMode]:
+    raw = _load(path or LINE_CONFIG)["legacy_mode"]["fans"]
+    fans: dict[str, FanMode] = {}
+    for name, spec in raw.items():
+        if isinstance(spec, dict):
+            fans[name] = FanMode(kind="robot_do", do=int(spec["robot_do"]))
+        elif spec in ("always_on", "none"):
+            fans[name] = FanMode(kind=spec)
+        else:
+            raise ValueError(f"unknown fan mode for {name}: {spec!r}")
+    return fans
+
+
 def load_brush_config(path: Path | None = None) -> BrushConfig:
     raw = _load(path or CELL_CONFIG)
     moves, motion, timings = raw["moves"], raw["motion"], raw["timings"]

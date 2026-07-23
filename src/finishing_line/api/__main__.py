@@ -52,6 +52,59 @@ def _build_sim(cfg):
     return cfg, cc, robot, physics
 
 
+def _run_legacy(args, cfg) -> None:
+    """Legacy-mod route: interleave on the unmodified legacy firmware."""
+    from ..config.loader import load_legacy_fans, load_products
+    from ..devices.legacy_clearcore import LegacyClearCoreClient
+    from ..process.legacy_controller import LegacyController
+    from ..process.legacy_sequencer import LegacySequencer
+    from ..process.legacy_train import LegacyTrain
+
+    cc = LegacyClearCoreClient(args.legacy).connect()
+    train = LegacyTrain(cc)
+    fans = load_legacy_fans()
+    fan_do = None
+
+    if args.no_robot:
+        from ..sim.fake_robot import FakeRobot
+        robot = FakeRobot(work_s=5.0, spray_s=5.0)
+        print(f"LEGACY MODE (belt only): legacy ClearCore at {args.legacy}, FAKE robot")
+    else:
+        if not args.ur_host:
+            raise SystemExit("--legacy with a real robot needs --ur-host (or pass --no-robot)")
+        from ..config.loader import load_brush_config, load_robot_setup, load_sand_config, load_spray_config
+        from ..devices.legacy_belt import LegacyBeltAdapter
+        from ..devices.ur import Dashboard, URClient
+        from ..process.gun_clean import GunClean
+        from ..process.robot_ur import URRobot
+        from ..process.sander import Sander
+        from ..process.sprayer import Sprayer
+
+        print(f"LEGACY MODE: legacy ClearCore at {args.legacy}, real UR5e at {args.ur_host}")
+        Dashboard(args.ur_host).connect().power_on_and_release()
+        ur = URClient(args.ur_host, load_robot_setup())
+        belt = LegacyBeltAdapter(cc)
+        products = load_products()
+        robot = URRobot(
+            ur, Sander(ur, belt, load_sand_config()),
+            Sprayer(ur, belt, load_spray_config()),
+            GunClean(ur, belt, load_brush_config()),
+            lambda pid: products[sequencer.parts[pid].product.value],
+        )
+        if any(f.controllable for f in fans.values()):
+            fan_do = ur.set_digital_out
+
+    sequencer = LegacySequencer(train, robot, cfg, fans, fan_do=fan_do)
+    controller = LegacyController(sequencer, cfg, state_file=args.state_file).start()
+    if sequencer.fault is not None:
+        print(f"RESTORED with parts on the line: {sequencer.fault}")
+    fan_desc = ", ".join(f"{k}={v.kind}{'' if v.do is None else f'(DO{v.do})'}"
+                         for k, v in fans.items())
+    print(f"fans: {fan_desc}")
+    print(f"HMI: http://localhost:{args.port}")
+    uvicorn.run(create_app(controller), host="0.0.0.0", port=args.port, log_level="warning")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser(prog="finishing_line.api")
     mode = ap.add_mutually_exclusive_group(required=True)
@@ -59,6 +112,16 @@ def main() -> None:
     mode.add_argument("--cc", metavar="HOST", help="real ClearCore, fake robot")
     mode.add_argument("--ur", metavar="UR_HOST",
                       help="real ClearCore + real UR5e at UR_HOST (needs ur_rtde: Linux/WSL2)")
+    mode.add_argument("--legacy", metavar="CC_HOST",
+                      help="LEGACY-MOD route: unmodified legacy ClearCore firmware at "
+                           "CC_HOST (production: 192.168.1.18), direct-entry interleave "
+                           "(docs/legacy-mod-choreography.md). Robot via --ur-host, or "
+                           "--no-robot for belt-only sessions.")
+    ap.add_argument("--ur-host", default=None,
+                    help="UR5e host for --legacy (required unless --no-robot)")
+    ap.add_argument("--no-robot", action="store_true",
+                    help="legacy mode with FakeRobot — automatic choreography with the "
+                         "HMI, no arm motion (the belt-only bring-up session)")
     ap.add_argument("--cc-host", default=None,
                     help="ClearCore host for --ur (default: registers.CLEARCORE_HOST)")
     ap.add_argument("--flash-seconds", type=float, default=None,
@@ -81,6 +144,11 @@ def main() -> None:
     cfg = load_process_config()
     if args.flash_seconds is not None:
         cfg = replace(cfg, flash_seconds=args.flash_seconds)
+
+    if args.legacy:
+        _run_legacy(args, cfg)
+        return
+
     physics = None
     if args.sim:
         cfg, cc, robot, physics = _build_sim(cfg)

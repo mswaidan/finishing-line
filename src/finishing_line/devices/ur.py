@@ -249,6 +249,11 @@ class URClient:
     def set_sprayer(self, on: bool) -> None:
         self._io.setStandardDigitalOut(self.SPRAYER_OUTPUT, on)
 
+    def set_digital_out(self, output: int, on: bool) -> None:
+        """Generic standard DO — e.g. the legacy-mod fan relays
+        (line-config legacy_mode.fans robot_do numbers)."""
+        self._io.setStandardDigitalOut(output, on)
+
     # ------------------------------------------------------------------- tcp
 
     def use_spray_tcp(self) -> None:

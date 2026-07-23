@@ -106,7 +106,8 @@ function render(s){
   latest = s;
   $("beat").textContent = s.beat;
   $("phase").textContent = s.phase;
-  $("shutter").textContent = "shutter " + (s.clearcore.shutter ?? "?").toLowerCase();
+  if (s.mode === "legacy") $("shutter").style.display = "none";
+  else $("shutter").textContent = "shutter " + (s.clearcore.shutter ?? "?").toLowerCase();
   $("btn-run").classList.toggle("on", s.enabled);
 
   const banner = $("banner");
