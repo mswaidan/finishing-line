@@ -44,9 +44,14 @@ class FakeTrain:
     def _res(self):
         return {"arrived": self.arrive, "entered": None, "seconds": 0.01}
 
+    mm_per_s = 53.0
+
     def load(self):
         self.log.append("load")
-        return self._res()
+        if self.available > 0 and self.arrive:
+            self.available -= 1
+            return {"arrived": True, "entered": True, "seconds": 0.01}
+        return {"arrived": False, "entered": False, "seconds": 0.01}
 
     def stage(self, **_kw):
         self.log.append("stage")
@@ -68,8 +73,8 @@ class FakeTrain:
         self.log.append("return")
         return self._res()
 
-    def blind(self):
-        self.log.append("blind")
+    def blind(self, *, reduce_mm: float = 0.0):
+        self.log.append(f"blind(reduce={reduce_mm:.0f})")
 
     def idle(self):
         self.log.append("idle")
@@ -115,9 +120,9 @@ def test_four_part_soak_completes_in_order_never_underflashed():
         ("spray1", "L1"), ("spray1", "T1"), ("spray2", "L1"), ("spray2", "T1"),
         ("spray1", "L2"), ("spray1", "T2"), ("spray2", "L2"), ("spray2", "T2"),
     ]
-    # Direct entry everywhere: idle intake + 3 in-pattern entries, no load.
-    assert train.log.count("load") == 0
-    assert sum(1 for e in train.log if e.startswith("entry")) == 4
+    # Idle intake = the both-belts LOAD; the other three enter in-pattern.
+    assert train.log.count("load") == 1
+    assert sum(1 for e in train.log if e.startswith("entry")) == 3
     assert train.log.count("retreat") == 2 and train.log.count("return") == 2
 
 
@@ -231,6 +236,35 @@ def test_intake_product_switch_changes_minted_parts():
               timeout_s=30.0)
     assert seq.completed[1] == "b0002"
     assert str(seq.parts["b0002"].product) == "browser"
+
+
+def test_starved_probe_slide_is_compensated_by_the_shuffle():
+    """The bug from the 3-cube run: a starved probe's nudge slides the belt
+    while the model (rightly) keeps its stations. The following blind shuffle
+    must subtract the measured slide so belt and model agree again."""
+    seq, train, _robot = make_seq(parts_available=1)
+    train.stage_result = {"staged": True, "nudged": True, "nudge_s": 2.0}
+    run_until(seq, lambda s, b: s.completed == ["c0001"] and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.fault is None
+    # A starved probe (available=0) reported a 2.0 s nudge = 106 mm slide;
+    # the very next shuffle must carry reduce=106, and non-probe shuffles 0.
+    reduces = [e for e in train.log if e.startswith("blind")]
+    assert any(e == "blind(reduce=106)" for e in reduces), reduces
+    assert seq._probe_slide_mm == 0.0, "slide must be consumed, never linger"
+
+
+def test_queue_eye_suppresses_starved_probes_entirely():
+    seq, train, _robot = make_seq(parts_available=1)
+    seq._queue_present = lambda: train.available > 0  # simulated infeed eye
+    run_until(seq, lambda s, b: s.completed == ["c0001"] and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    # With the eye reporting empty, no stage probe ever ran after intake:
+    # no feed pulses, no nudge hops, and every shuffle moved the full spacing.
+    assert train.log.count("stage") == 0
+    assert all(e == "blind(reduce=0)" for e in train.log if e.startswith("blind"))
+    blocked = seq.step()
+    assert "queue eye" in blocked
 
 
 def test_controller_halt_at_boundary_and_snapshot_shape(tmp_path):

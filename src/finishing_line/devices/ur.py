@@ -254,6 +254,13 @@ class URClient:
         (line-config legacy_mode.fans robot_do numbers)."""
         self._io.setStandardDigitalOut(output, on)
 
+    def get_digital_in(self, input_no: int) -> bool:
+        """Generic standard DI — e.g. the legacy-mod infeed queue eye
+        (line-config legacy_mode.queue_eye.robot_di). Standard DIs are the
+        low bits of the combined input word."""
+        bits = int(self._receive.getActualDigitalInputBits())
+        return bool((bits >> input_no) & 1)
+
     # ------------------------------------------------------------------- tcp
 
     def use_spray_tcp(self) -> None:

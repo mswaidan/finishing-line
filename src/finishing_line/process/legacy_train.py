@@ -31,6 +31,11 @@ class LegacyTrain:
         #: used for blind fill/drain shuffles once one exists.
         self.last_spacing_mm: float | None = None
 
+    @property
+    def mm_per_s(self) -> float:
+        k = self._cc.kinematics
+        return k.velocity_steps_per_sec / k.microsteps_per_mm
+
     def _record(self, res: dict) -> dict:
         if res.get("arrived"):
             mmps = self._cc.kinematics.velocity_steps_per_sec / self._cc.kinematics.microsteps_per_mm
@@ -69,9 +74,16 @@ class LegacyTrain:
         return self._record(self._cc.transition_move(
             self._pitch_mm, stop_on_work_zero=True, o_occupied=o_occupied))
 
-    def blind(self) -> None:
-        """Fill/drain shuffle with no O-arrival: one spacing, open loop."""
-        self._cc.move_mm(self.last_spacing_mm or self._pitch_mm)
+    def blind(self, *, reduce_mm: float = 0.0) -> None:
+        """Fill/drain shuffle with no O-arrival: one spacing, open loop.
+
+        reduce_mm compensates belt motion that already happened this beat —
+        a starved stage-probe's nudge slides every part by its measured
+        travel, so the shuffle moves that much less and parts land back on
+        their stations (model and belt agree again)."""
+        distance = (self.last_spacing_mm or self._pitch_mm) - reduce_mm
+        if distance > 1.0:
+            self._cc.move_mm(distance)
 
     def idle(self) -> None:
         self._cc.move_idle()

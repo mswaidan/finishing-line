@@ -94,7 +94,17 @@ def _run_legacy(args, cfg) -> None:
         if any(f.controllable for f in fans.values()):
             fan_do = ur.set_digital_out
 
-    sequencer = LegacySequencer(train, robot, cfg, fans, fan_do=fan_do)
+    queue_present = None
+    if not args.no_robot:
+        from ..config.loader import load_legacy_queue_eye
+        di, invert = load_legacy_queue_eye()
+        if di is not None:
+            queue_present = (lambda: not ur.get_digital_in(di)) if invert \
+                else (lambda: ur.get_digital_in(di))
+            print(f"queue eye: robot DI{di} ({'active_low' if invert else 'active_high'})")
+
+    sequencer = LegacySequencer(train, robot, cfg, fans, fan_do=fan_do,
+                                queue_present=queue_present)
     controller = LegacyController(sequencer, cfg, state_file=args.state_file).start()
     if sequencer.fault is not None:
         print(f"RESTORED with parts on the line: {sequencer.fault}")

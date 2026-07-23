@@ -55,6 +55,7 @@ class LegacySequencer:
         fans: dict[str, FanMode],
         *,
         fan_do: Callable[[int, bool], None] | None = None,
+        queue_present: Callable[[], bool] | None = None,
         continuous_intake: bool = True,
         intake_product: str = "cube",
         tick_s: float = 0.2,
@@ -81,6 +82,13 @@ class LegacySequencer:
         self.minted = 0
         self._pair = -1
         self._pending_enterer: str | None = None
+        #: Optional infeed-queue presence signal (e.g. a spare F18 eye on a
+        #: robot digital input). When present, starved probes never run at
+        #: all — no feed pulses, no nudge hops, silent drains.
+        self._queue_present = queue_present
+        #: Belt travel a starved stage-probe's nudge already caused this beat;
+        #: the next blind shuffle subtracts it so stations stay true.
+        self._probe_slide_mm = 0.0
         self.beat: str = BEATS[0]
         self.phase: str = PHASE_IDLE
         self.fault: str | None = None
@@ -197,18 +205,23 @@ class LegacySequencer:
         if not self.queue and not self._continuous:
             time.sleep(self._tick_s)
             return "line empty — declare a batch to begin"
-        # Intake attempt: the feed runs (long window at idle — this IS the
-        # "feed runs continuously when the belt is empty" behavior), and the
-        # nudge doubles as the jam-clearer, so a miss genuinely means empty.
-        res = self._train.stage(feed_timeout_s=25.0)
-        if not res["staged"]:
+        if self._queue_present is not None and not self._queue_present():
+            time.sleep(self._tick_s)
+            return "infeed empty (queue eye) — waiting for parts"
+        # Intake: BOTH belts run — the legacy load maneuver. The line is
+        # empty, so a part crossing the junction always has a moving main
+        # belt under it (no awkward feed-only shove), and it rides straight
+        # to work-zero. The cap bounds an empty probe; nothing arriving just
+        # means no parts yet.
+        res = self._train.load()
+        if not res.get("arrived"):
+            if res.get("entered"):
+                return self._fault(
+                    "part boarded during intake but never reached work-zero — jam?")
             if not self._continuous:
                 return self._fault("declared parts not found at the infeed")
-            return "waiting for parts at the infeed (feed running)"
+            return "waiting for parts — intake ran (both belts), none arrived"
         enterer = self.queue.pop(0) if self.queue else self._mint(PartRole.LEAD)
-        r = self._train.entry(o_occupied=False)
-        if not r.get("arrived"):
-            return self._fault("intake entry never reached work-zero")
         self.occ[Station.O] = enterer
         self.beat = BEATS[0]
         self.phase = PHASE_ROBOT
@@ -290,22 +303,38 @@ class LegacySequencer:
         return None
 
     def _step_stage(self) -> str | None:
+        if (self._continuous and self._queue_present is not None
+                and not self._queue_present()):
+            # Queue eye says empty: skip without running the feed at all — no
+            # probe pulses, no nudge hops, no belt slides. The clean drain.
+            self.stage_note = "infeed empty (queue eye) — entry skipped"
+            self._pending_enterer = None
+            self._staged_ok = False
+            self.phase = PHASE_TRANSITION
+            return None
         res = self._train.stage()
         if not res["staged"]:
             if not self._continuous:
                 return self._fault("staging failed (feed + nudge) — check the junction")
             # SKIP-AND-DRAIN: the nudge is the jam-discriminator (anything
             # mid-junction surfaces within its cap), so a double-miss means
-            # the infeed is genuinely empty. No enterer this beat; in-flight
-            # parts continue and the line refills whenever parts appear.
-            self.stage_note = "no part at the infeed — entry skipped"
+            # the infeed is genuinely empty. The nudge's belt travel already
+            # slid every part by its measured distance — record it so the
+            # following shuffle compensates and stations stay true.
+            if res.get("nudged"):
+                self._probe_slide_mm = res["nudge_s"] * self._train.mm_per_s
+                self.stage_note = (f"no part at the infeed — entry skipped "
+                                   f"(probe slid ~{self._probe_slide_mm:.0f} mm; "
+                                   f"shuffle compensates)")
+            else:
+                self.stage_note = "no part at the infeed — entry skipped"
             self._pending_enterer = None
             self._staged_ok = False
             self.phase = PHASE_TRANSITION
             return None
         if res["nudged"]:
-            mmps = 53.0
-            self.stage_note = f"staged via nudge ~{res['nudge_s'] * mmps:.0f} mm"
+            self.stage_note = (f"staged via nudge "
+                               f"~{res['nudge_s'] * self._train.mm_per_s:.0f} mm")
         else:
             self.stage_note = "staged (feed only)"
         role = PartRole.TRAIL if self.beat == "P1" else PartRole.LEAD
@@ -332,7 +361,7 @@ class LegacySequencer:
                     enterer, self._pending_enterer = self._pending_enterer, None
                     self._shift_downstream(enterer=enterer)
                 elif self.occ:
-                    self._train.blind()
+                    self._train.blind(reduce_mm=self._probe_slide_mm)
                     self._shift_downstream(enterer=None)
             elif beat == "P2":
                 if self.occ.get(Station.F2):
@@ -361,6 +390,7 @@ class LegacySequencer:
         except Exception as exc:
             return self._fault(f"belt failed during {beat} transition: {exc}")
 
+        self._probe_slide_mm = 0.0  # consumed (or made moot) by this transition
         self.sensors = self._train.sensors()
         self.beat = next_beat(beat)
         # F1 fan for the new beat (robot_do mode): on iff a wet part rests there.

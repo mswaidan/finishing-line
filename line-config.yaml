@@ -122,6 +122,15 @@ legacy_mode:
   sensor_polarity:
     offload: active_low
 
+  # Optional infeed-queue presence eye (a spare F18 wired to a robot standard
+  # DIGITAL INPUT, read over RTDE). When set, starved stage-probes never run:
+  # no feed pulses or nudge hops while the infeed is empty — silent drains.
+  # null until the eye is mounted; then set the DI number. active_low matches
+  # the F18 factory default (empty = HI).
+  queue_eye:
+    robot_di: null
+    polarity: active_low
+
 watchdog:
   # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side
   # timeout must live in firmware, not here — if the orchestrator is the thing

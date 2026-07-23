@@ -281,6 +281,15 @@ def load_legacy_fans(path: Path | None = None) -> dict[str, FanMode]:
     return fans
 
 
+def load_legacy_queue_eye(path: Path | None = None) -> tuple[int | None, bool]:
+    """(robot_di, invert) for the optional infeed-queue eye; (None, ...) if
+    not mounted yet. invert=True means part present reads LOW (F18 default)."""
+    raw = _load(path or LINE_CONFIG)["legacy_mode"].get("queue_eye", {})
+    di = raw.get("robot_di")
+    return (int(di) if di is not None else None,
+            raw.get("polarity", "active_low") == "active_low")
+
+
 def load_legacy_sensor_inversion(path: Path | None = None) -> dict[str, bool]:
     """Which legacy sensors read inverted (part present = LOW), by name
     (work_at_zero / offload / onload). Sparse config: unlisted = active_high.
