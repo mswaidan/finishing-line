@@ -68,6 +68,13 @@ class FakeTrain:
     def feed_tick(self):
         return None
 
+    def feed_suspend(self):
+        self.log.append("feed_suspend")
+        return False
+
+    def feed_resume(self):
+        self.log.append("feed_resume")
+
     def entry(self, *, o_occupied):
         self.log.append("entry")
         if self.arrive:

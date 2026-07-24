@@ -244,6 +244,11 @@ class LegacySequencer:
             # receives the beat's coat if it NEEDS it; a mismatched part just
             # waits a beat (over-flash is safe by design, §6).
             if part.coats_applied < spec.robot.coat:
+                # The robot composite is the one long span nothing polls: a
+                # follower arriving at ONLOAD mid-sand would be pushed across
+                # the junction onto a sweeping Z2. Pause the hunt; the flash
+                # wait right after polls every tick.
+                resume_feed = self._train.feed_suspend()
                 try:
                     if spec.robot.clean_gun:
                         self._robot.clean_gun(pid)
@@ -267,7 +272,11 @@ class LegacySequencer:
                         self._set_f1(True)
                     self._robot.safe_pose()
                 except Exception as exc:  # device failure = fault, belt idled
+                    # No feed_resume here: _fault idles everything, and a live
+                    # coil with a cancelled watch is the known disaster combo.
                     return self._fault(f"robot failed during {self.beat}: {exc}")
+                if resume_feed:
+                    self._train.feed_resume()
                 self.parts[pid] = replace(
                     part, coats_applied=spec.robot.coat, is_wet=True)
                 self._on_change()

@@ -61,6 +61,17 @@ class LegacyTrain:
         """Advance the persistent Z1 watch (one nonblocking poll)."""
         return self._cc.feed_tick()
 
+    def feed_suspend(self) -> bool:
+        """Pause a live Z1 watch (coil off, watch kept) for a long blocking
+        span nothing polls — the robot composite. True if one was paused."""
+        if self._cc.feed_watch_active:
+            self._cc.set_feed(False)
+            return True
+        return False
+
+    def feed_resume(self) -> None:
+        self._cc.set_feed(True)
+
     def entry(self, *, o_occupied: bool) -> dict:
         """Staged enterer rides STAGING -> O, sensor-stopped. Entries ONLY
         run from a confirmed staged position — an unstaged part skips the
