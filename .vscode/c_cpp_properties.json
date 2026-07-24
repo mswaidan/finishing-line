@@ -8,7 +8,8 @@
         {
             "name": "PlatformIO",
             "includePath": [
-                "L:/Projects/2602 UR5 Cube Edge Sand/Code/firmware/finishing_line",
+                "L:/Projects/2602 UR5 Cube Edge Sand/Code/firmware",
+                "L:/Projects/2602 UR5 Cube Edge Sand/Code/.pio/libdeps/legacy_queue_eye/modbus-esp8266/src",
                 "C:/Users/mswaidan/.platformio/packages/framework-arduino-samd-clearcore/variants/clearcore/ThirdParty/SAME53/CMSIS/Device/Include",
                 "C:/Users/mswaidan/.platformio/packages/framework-cmsis/CMSIS/Include",
                 "C:/Users/mswaidan/.platformio/packages/framework-cmsis-atmel/CMSIS/Device/ATMEL",
@@ -34,7 +35,8 @@
             "browse": {
                 "limitSymbolsToIncludedHeaders": true,
                 "path": [
-                    "L:/Projects/2602 UR5 Cube Edge Sand/Code/firmware/finishing_line",
+                    "L:/Projects/2602 UR5 Cube Edge Sand/Code/firmware",
+                    "L:/Projects/2602 UR5 Cube Edge Sand/Code/.pio/libdeps/legacy_queue_eye/modbus-esp8266/src",
                     "C:/Users/mswaidan/.platformio/packages/framework-arduino-samd-clearcore/variants/clearcore/ThirdParty/SAME53/CMSIS/Device/Include",
                     "C:/Users/mswaidan/.platformio/packages/framework-cmsis/CMSIS/Include",
                     "C:/Users/mswaidan/.platformio/packages/framework-cmsis-atmel/CMSIS/Device/ATMEL",

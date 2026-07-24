@@ -3,7 +3,7 @@
 Pins the protocol behaviors that cost real debugging on the line (2026-07-22):
 request-id dedup + cross-client seeding, the 16-bit distance cap, auto-pushed
 params, the WORK_AT_ZERO edge chains (arrival / pass+re-approach), boarding
-feed-cut on first ONLOAD rising, and two-phase staging with the belt nudge.
+feed-cut on first STAGING rising, and two-phase staging with the belt nudge.
 The fake emulates the controller; these tests poke the sensors as physics.
 """
 
@@ -71,6 +71,22 @@ def test_sensor_polarity_inversion_normalizes_mixed_fleets(rig):
         cc2.close()
         fake.set_sensor("offload", False)
         fake.set_sensor("onload", False)
+
+
+def test_staging_eye_read_with_f18_polarity(rig):
+    """Legacy v1.1's staging eye (discrete 7), normalized like every sensor:
+    F18 polarity means raw HI = empty, raw LO = part parked at staging."""
+    fake, _cc, _poke = rig
+    cc2 = LegacyClearCoreClient("127.0.0.1", port=PORT, poll_s=0.005,
+                                invert_sensors={"staging": True}).connect()
+    try:
+        fake.set_sensor("staging", True)    # raw HI = F18 sees nothing
+        assert cc2.staging_present() is False
+        fake.set_sensor("staging", False)   # raw LO = part present
+        assert cc2.staging_present() is True
+    finally:
+        cc2.close()
+        fake.set_sensor("staging", False)
 
 
 def test_params_are_pushed_and_echoed(rig):
@@ -146,7 +162,7 @@ def test_cap_reached_without_arrival_is_reported_not_raised(rig):
 
 def test_boarding_feed_cuts_on_first_rising_edge(rig):
     fake, cc, poke = rig
-    poke(0.3, "onload", True)  # enterer's nose reaches the eye mid-move
+    poke(0.3, "staging", True)  # enterer's nose reaches the eye mid-move
     res = cc.transition_move(300.0, feed=True)
     assert res["entered"] is True
     assert fake.coils[107] == 0, "feed must be cut at the FIRST rising edge"
@@ -154,7 +170,7 @@ def test_boarding_feed_cuts_on_first_rising_edge(rig):
 
 def test_stage_feed_only_never_moves_the_belt(rig):
     fake, cc, poke = rig
-    poke(0.2, "onload", True)
+    poke(0.2, "staging", True)
     st = cc.stage_next(feed_timeout_s=2.0)
     assert st == {"staged": True, "nudged": False, "nudge_s": 0.0}
     assert fake.moves_started == 0, "phase A is feed-only: belt untouched"
@@ -163,7 +179,7 @@ def test_stage_feed_only_never_moves_the_belt(rig):
 
 def test_stage_nudge_finishes_a_stalled_crossing(rig):
     fake, cc, poke = rig
-    poke(0.6, "onload", True)  # fires only after phase A gives up at 0.3 s
+    poke(0.6, "staging", True)  # fires only after phase A gives up at 0.3 s
     st = cc.stage_next(feed_timeout_s=0.3, nudge_timeout_s=5.0)
     assert st["staged"] is True and st["nudged"] is True
     assert st["nudge_s"] > 0

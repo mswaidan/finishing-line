@@ -35,6 +35,12 @@ class Status(IntEnum):
     WORK_AT_ZERO = 4
     OFFLOAD = 5
     ONLOAD = 6
+    #: Legacy v1.1 ONLY (firmware/legacy_queue_eye): the STAGING eye — the
+    #: DI-6 sensor, remounted 2026-07-25 on the main belt ~450 mm past the
+    #: feed junction (it briefly watched the infeed queue before that;
+    #: ONLOAD went back to the junction itself the same day).
+    #: The original v1.0 firmware rejects reads of this address.
+    STAGING = 7
 
 
 class Command(IntEnum):

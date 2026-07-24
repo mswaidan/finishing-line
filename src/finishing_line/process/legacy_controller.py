@@ -210,7 +210,7 @@ class LegacyController:
                 "shutter": "NONE",  # no shutter on the legacy-mod route
                 "fans": {"F1": seq._fan_on(Station.F1), "F2": seq._fan_on(Station.F2)},
                 "sensors": {
-                    "F1": bool(sensors.onload) if sensors else None,
+                    "F1": bool(sensors.staging) if sensors else None,
                     "O": bool(sensors.work_at_zero) if sensors else None,
                     "F2": None,  # no eye at F2 on this route
                     "IN": bool(seq.queue),

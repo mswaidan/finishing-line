@@ -11,8 +11,14 @@ Driver: `devices/legacy_clearcore.py`. Harness: `scripts/choreography_poc.py`.
 
 ## The direct-entry scheme (final form)
 
-Two sensors run everything: **WORK_AT_ZERO** (WZ, at O) and **ONLOAD** (the
-"eye", relocated ~one part-width past the feed/main-belt junction).
+Two sensors run everything: **WORK_AT_ZERO** (WZ, at O) and the **STAGING
+eye** (discrete 7, ~450 mm past the feed/main-belt junction).
+
+> 2026-07-25 sensor shuffle: during the POC the "eye" was the ONLOAD sensor
+> physically relocated downstream. ONLOAD is now back AT the junction (its
+> original legacy position — currently unwatched by the choreography), and a
+> dedicated STAGING eye (the legacy v1.1 DI-6 sensor, discrete 7) took over
+> the downstream park position. Same geometry, different address.
 
 ```
 load    : C1 queue->O   (continuous belt + feed boarding-assist, WZ stop)
@@ -48,8 +54,9 @@ On one belt:
    retreat correspondingly. Full-belt staging => spacing ≈ queue->WZ ≈ 1115 mm
    => retreat ~400 mm into the junction. Not fixable by choreography.
 
-Measured geometry (this line): junction->WZ ≈ 1075 mm; eye at ~junction+400;
-steady spacing ≈ eye->WZ ≈ 700 mm (max safe ≈ 713 = 1075 − part width 362).
+Measured geometry (this line): junction->WZ ≈ 1075 mm; staging eye at
+junction+450 (2026-07-25 mount — was ~+400 during the POC); steady spacing ≈
+eye->WZ ≈ 625 mm (max safe ≈ 713 = 1075 − part width 362).
 
 ## Staging: just-in-time + sensor-stopped nudge
 
@@ -59,7 +66,7 @@ as `stage_next()`:
 
 - **Phase A, feed-only** (spacing-neutral) toward the eye. Usually completes.
 - **Phase B, the NUDGE** (only on stall): main belt + feed together,
-  sensor-stopped on ONLOAD HI. The mostly-aboard part grips the moving belt
+  sensor-stopped on STAGING HI. The mostly-aboard part grips the moving belt
   (consistent handoff — moving-belt crossings never stalled all night) and
   parks at the eye. Downstream parts slide by the stall shortfall **δ** only.
 
@@ -75,7 +82,8 @@ harmless. Consequences, all by construction:
   spacing becomes ~713+δ and the retreat lands δ short of the eye.
 
 **Eye placement rule: ≥ one part-width + ~90 mm past the junction** (δ headroom
-+ stop latency). If reported nudges ever exceed ~150 mm, look at the junction
++ stop latency). The 2026-07-25 mount at junction+450 gives 88 mm of headroom —
+right at the rule; if reported nudges ever exceed ~80 mm, look at the junction
 mechanically or add eye margin.
 
 (Deferred alternative if nudge grip proves inconsistent: a third eye mid-belt

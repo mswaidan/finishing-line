@@ -46,7 +46,8 @@ BELT_STATIONS = (Station.F1, Station.O, Station.F2)  # stations ON the main belt
 def sensors_line(cc: LegacyClearCoreClient) -> str:
     d = cc.read_inputs()
     return (f"state={d.server_state}  WORK_AT_ZERO={'●' if d.work_at_zero else '·'}  "
-            f"ONLOAD={'●' if d.onload else '·'}  OFFLOAD={'●' if d.offload else '·'}")
+            f"ONLOAD={'●' if d.onload else '·'}  STAGING={'●' if d.staging else '·'}  "
+            f"OFFLOAD={'●' if d.offload else '·'}")
 
 
 def confirm_go(what: str) -> bool:
@@ -102,8 +103,8 @@ def cmd_idle(cc: LegacyClearCoreClient, args) -> None:
 
 
 def _feed_recovery(cc: LegacyClearCoreClient, part: str) -> None:
-    """ONLOAD never completed its pass — let the operator pulse the feed."""
-    print(f"  !! ONLOAD did not complete its HI->LO pass — {part} may be mid-junction.")
+    """The STAGING eye never fired — let the operator pulse the feed."""
+    print(f"  !! STAGING eye never fired — {part} may be mid-junction.")
     while True:
         ans = input("     f+ENTER = pulse feed 1 s · ENTER = continue (part placed/ok): ").strip().lower()
         if ans != "f":
@@ -183,7 +184,7 @@ def cmd_run(cc: LegacyClearCoreClient, args) -> None:
     first = queue.pop(0)
     if args.feed:
         input(f"\n>> {first} will LOAD queue->O (continuous, work-zero stop; feed cuts "
-              "at the FIRST ONLOAD HI — aboard). ENTER... ")
+              "at the FIRST STAGING HI — aboard). ENTER... ")
         res = cc.transition_move(900.0, stop_on_work_zero=True, feed=True, continuous=True,
                                  timeout_s=120.0)
         est = report(res, "load")
@@ -250,7 +251,7 @@ def cmd_run(cc: LegacyClearCoreClient, args) -> None:
             # (beat-end, δ-slide harmless). Phase 1 — the entry ride, feed OFF
             # (enterer is aboard at the eye); feed boarding-assist only as a
             # fallback if staging failed outright.
-            staged = cc.read_inputs().onload or stage_jit(queue[0])
+            staged = cc.read_inputs().staging or stage_jit(queue[0])
             res = cc.transition_move(900.0, stop_on_work_zero=True,
                                      o_occupied=occ.get(Station.O) is not None,
                                      feed=not staged, continuous=True, timeout_s=120.0)
@@ -295,12 +296,12 @@ def cmd_run(cc: LegacyClearCoreClient, args) -> None:
             est = report(res, "retreat")
             if res["arrived"]:
                 last_spacing = est
-            # With ONLOAD one cube downstream of the junction, the retreated
-            # trail rests nose-at-the-eye — ONLOAD doubles as the F1 position
-            # check (junction is clear during retreats, so HI is unambiguous).
+            # With the STAGING eye ~450 mm downstream of the junction, the
+            # retreated trail rests nose-at-the-eye — STAGING doubles as the
+            # F1 position check (junction is clear during retreats).
             if occ.get(Station.O):  # a trail was carried back to F1
-                on = cc.read_inputs().onload
-                print("  F1 check (ONLOAD): "
+                on = cc.read_inputs().staging
+                print("  F1 check (STAGING): "
                       + ("HI ✓ trail resting at the eye — F1 fan mounts here"
                          if on else "LO — trail short of the eye; note where it rests"))
             if occ.get(Station.O):
@@ -347,8 +348,8 @@ def main() -> int:
                         "measured spacing once one exists)")
     r.add_argument("--parts", type=int, default=4, help="simulated parts (default 4)")
     r.add_argument("--feed", action="store_true",
-                   help="entries ride queue->O with the feed running (ONLOAD pass "
-                        "semantics); staging is timed so the junction is clear "
+                   help="entries ride queue->O with the feed running (STAGING-eye "
+                        "boarding cut); staging is timed so the junction is clear "
                         "whenever a retreat runs")
     args = ap.parse_args()
 

@@ -121,15 +121,19 @@ legacy_mode:
   # active_high or the inversion doubles up.
   sensor_polarity:
     offload: active_low
+    staging: active_low  # the staging eye is an F18 (part present reads LOW)
 
-  # Optional infeed-queue presence eye (a spare F18 wired to a robot standard
-  # DIGITAL INPUT, read over RTDE). When set, starved stage-probes never run:
-  # no feed pulses or nudge hops while the infeed is empty — silent drains.
-  # null until the eye is mounted; then set the DI number. active_low matches
-  # the F18 factory default (empty = HI).
+  # Infeed-queue presence signal. NONE currently exists (2026-07-25): the
+  # DI-6 eye that briefly watched the queue was remounted as the STAGING eye
+  # (main belt, ~450 mm past the junction, discrete 7 — the choreography's
+  # park sensor; ONLOAD went back to the junction itself). With source: none,
+  # starved stage-probes + slide compensation carry intake, as validated
+  # before the eye existed.
+  # source: robot_di = spare UR digital input (needs PNP handling — unused);
+  #         none     = no queue sensor.
   queue_eye:
+    source: none
     robot_di: null
-    polarity: active_low
 
 watchdog:
   # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side

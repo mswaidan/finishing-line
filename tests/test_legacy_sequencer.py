@@ -81,7 +81,7 @@ class FakeTrain:
 
     def sensors(self):
         return SimpleNamespace(server_state=1, work_at_zero=True,
-                               onload=False, offload=self.offload)
+                               onload=False, staging=False, offload=self.offload)
 
 
 def make_seq(fans=ALWAYS_ON, fan_do=None, robot=None, train=None,

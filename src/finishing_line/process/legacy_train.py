@@ -6,9 +6,9 @@ reads like the choreography it runs. All belt motion is CAPPED distance moves
 (crash-safe: a dead PC leaves at most the cap, then the firmware stops).
 
 Nominal distances are runaway caps, not targets — every arrival is
-sensor-stopped. Defaults reflect the measured geometry (eye->WZ ~700 mm,
-queue->WZ ~1115 mm); they only matter as caps and for the blind fill/drain
-shuffles.
+sensor-stopped. Defaults reflect the measured geometry (staging eye->WZ
+~625 mm since the 2026-07-25 eye remount at junction+450, queue->WZ
+~1115 mm); they only matter as caps and for the blind fill/drain shuffles.
 """
 
 from __future__ import annotations
@@ -46,7 +46,7 @@ class LegacyTrain:
 
     def load(self) -> dict:
         """First part: queue -> O in one run. Feed boards it (cut at first
-        ONLOAD rising), belt stops on the WORK_AT_ZERO arrival."""
+        STAGING rising), belt stops on the WORK_AT_ZERO arrival."""
         return self._record(self._cc.transition_move(
             self._load_mm, stop_on_work_zero=True, feed=True))
 
@@ -57,7 +57,7 @@ class LegacyTrain:
 
     def entry(self, *, o_occupied: bool, feed_assist: bool = False) -> dict:
         """Staged enterer rides eye -> O. feed_assist only if staging failed
-        (boarding cut at first ONLOAD rising)."""
+        (boarding cut at first STAGING rising)."""
         return self._record(self._cc.transition_move(
             self._pitch_mm, stop_on_work_zero=True,
             o_occupied=o_occupied, feed=feed_assist))

@@ -281,18 +281,23 @@ def load_legacy_fans(path: Path | None = None) -> dict[str, FanMode]:
     return fans
 
 
-def load_legacy_queue_eye(path: Path | None = None) -> tuple[int | None, bool]:
-    """(robot_di, invert) for the optional infeed-queue eye; (None, ...) if
-    not mounted yet. invert=True means part present reads LOW (F18 default)."""
+def load_legacy_queue_eye(path: Path | None = None) -> dict:
+    """Infeed-queue presence source: {'source': 'robot_di'|'none',
+    'robot_di': int|None}. No ClearCore option since 2026-07-25 — the DI-6
+    eye that briefly watched the queue is now the STAGING eye (discrete 7,
+    see sensor_polarity), and nothing watches the infeed queue."""
     raw = _load(path or LINE_CONFIG)["legacy_mode"].get("queue_eye", {})
+    source = raw.get("source", "none")
+    if source not in ("robot_di", "none"):
+        raise ValueError(f"unknown queue_eye source: {source!r}")
     di = raw.get("robot_di")
-    return (int(di) if di is not None else None,
-            raw.get("polarity", "active_low") == "active_low")
+    return {"source": source, "robot_di": int(di) if di is not None else None}
 
 
 def load_legacy_sensor_inversion(path: Path | None = None) -> dict[str, bool]:
     """Which legacy sensors read inverted (part present = LOW), by name
-    (work_at_zero / offload / onload). Sparse config: unlisted = active_high.
+    (work_at_zero / offload / onload / staging). Sparse config: unlisted =
+    active_high.
     """
     raw = _load(path or LINE_CONFIG)["legacy_mode"].get("sensor_polarity", {})
     inversion: dict[str, bool] = {}

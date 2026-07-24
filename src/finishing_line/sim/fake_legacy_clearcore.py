@@ -31,7 +31,8 @@ _WRITE_COIL, _WRITE_REGISTER, _WRITE_REGISTERS = 5, 6, 16
 _MODE, _DIRECTION, _VELOCITY, _ACCEL, _DISTANCE, _POSITION, _REQID = range(100, 107)
 _FEED, _BRUSH = 107, 108
 _STATE = 1
-_SENSORS = {"run": 3, "work_at_zero": 4, "offload": 5, "onload": 6}
+_SENSORS = {"run": 3, "work_at_zero": 4, "offload": 5, "onload": 6,
+            "staging": 7}  # staging = legacy v1.1 (firmware/legacy_queue_eye)
 
 
 class FakeLegacyClearCore:

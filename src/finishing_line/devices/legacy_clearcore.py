@@ -28,7 +28,10 @@ Register semantics (robot-side names, cell-config):
   holding 106 REQUEST_ID  (move fires on CHANGE while mode==0)
   coils   107 FEED_CONVEYOR / 108 BRUSH_ON (level-driven)
   input   1   SERVER_STATE (0 not ready, 1 ready, 2 moving)
-  discrete 4 WORK_AT_ZERO / 5 OFFLOAD / 6 ONLOAD (the three line sensors)
+  discrete 4 WORK_AT_ZERO / 5 OFFLOAD / 6 ONLOAD (the three original sensors)
+  discrete 7 STAGING (legacy v1.1 only): the choreography's park eye, ~450 mm
+             past the feed junction. Since 2026-07-25 ONLOAD sits back AT the
+             junction and the choreography watches STAGING instead.
   echo: input regs / discretes at command address + 100
 """
 
@@ -48,6 +51,7 @@ _SENSOR_ADDR = {
     "work_at_zero": Status.WORK_AT_ZERO,
     "offload": Status.OFFLOAD,
     "onload": Status.ONLOAD,
+    "staging": Status.STAGING,  # legacy v1.1 firmware only
 }
 
 try:
@@ -71,12 +75,17 @@ class LegacyClearCoreError(RuntimeError):
 
 @dataclass(frozen=True, slots=True)
 class LegacyInputs:
-    """One read of everything the legacy firmware reports."""
+    """One read of everything the legacy firmware reports.
+
+    `staging` needs legacy v1.1 firmware (discrete 7) — the choreography
+    requires it anyway, so read_inputs() reads it unconditionally.
+    """
 
     server_state: int
     work_at_zero: bool
     offload: bool
     onload: bool
+    staging: bool
 
 
 class LegacyClearCoreClient:
@@ -275,8 +284,8 @@ class LegacyClearCoreClient:
           return-to-zero (script:3191-3206) — so every part rests at O having
           approached from the same side, direction-independent.
         - feed: BOARDING ASSIST ONLY — the feed runs until the entering part's
-          nose trips the ONLOAD eye (first RISING edge = fully aboard, since
-          the eye sits ~one cube downstream of the junction), then cuts. If the
+          nose trips the STAGING eye (first RISING edge = fully aboard, since
+          the eye sits ~450 mm downstream of the junction), then cuts. If the
           eye is already HI at start (enterer pre-staged), the feed never runs.
           STAGING the next part must happen with the main belt STOPPED
           (stage_next) — a part pushed across the junction onto a moving belt
@@ -314,7 +323,7 @@ class LegacyClearCoreClient:
                     wz_phases += ["depart_hi", "depart_lo"]
                 wz_phases += ["arrive_hi"] + (["arrive_lo"] if pass_through else [])
             if feed:
-                on_prev = self._sensor(Status.ONLOAD)
+                on_prev = self._sensor(Status.STAGING)
                 if on_prev:  # enterer already aboard (pre-staged) — nothing to board
                     entered = True
                     self.set_feed(False)
@@ -335,7 +344,7 @@ class LegacyClearCoreClient:
                             arrived = True
                             self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
                 if feed and not entered:
-                    on = self._sensor(Status.ONLOAD)
+                    on = self._sensor(Status.STAGING)
                     if on and not on_prev:  # first rising edge: aboard — cut NOW
                         entered = True
                         self.set_feed(False)
@@ -390,9 +399,17 @@ class LegacyClearCoreClient:
     def set_brush(self, on: bool) -> None:
         self._write_coil(Command.BRUSH_ON, on)
 
+    def staging_present(self) -> bool:
+        """The staging eye — legacy v1.1 firmware only (discrete 7, polarity
+        normalized like every other sensor). True = a part is parked at the
+        staging point ~450 mm past the feed junction; NOT an infeed-queue
+        signal — nothing watches the queue upstream of the junction. Against
+        the original v1.0 firmware this raises LegacyClearCoreError."""
+        return self._sensor(Status.STAGING)
+
     def stage_next(self, *, feed_timeout_s: float = 10.0, nudge_timeout_s: float = 15.0,
                    nudge: bool = True) -> dict:
-        """Two-phase staging: park the queue head at the ONLOAD eye.
+        """Two-phase staging: park the queue head at the STAGING eye.
 
         Phase A — FEED ONLY (spacing-neutral: the main belt does not move, so
         the pair spacing and retreat depth are unaffected). The crossing onto
@@ -400,13 +417,13 @@ class LegacyClearCoreClient:
         part's weight leaves the feed) — physics, not a fault.
 
         Phase B — the NUDGE (only if A stalls): main belt + feed together,
-        sensor-stopped on ONLOAD HI. The mostly-aboard part grips the moving
+        sensor-stopped on STAGING HI. The mostly-aboard part grips the moving
         belt (consistent handoff) and parks at the eye. Downstream parts slide
         by the stall shortfall δ — run staging only at BEAT-END (work done, O
         part departing next move) where that slide is harmless. δ inflates
-        spacing and shifts the retreat landing by −δ: keep the eye mounted at
-        least one part-width + δ-margin past the junction, and watch the
-        reported nudge distance.
+        spacing and shifts the retreat landing by −δ. The 2026-07-25 mount
+        puts the eye at junction+450 ≈ part width (362) + 88 mm of δ-margin —
+        right at the placement rule; watch the reported nudge distance.
 
         Returns {'staged', 'nudged', 'nudge_s'}.
         """
@@ -414,7 +431,7 @@ class LegacyClearCoreClient:
         try:
             deadline = time.monotonic() + feed_timeout_s
             while time.monotonic() < deadline:
-                if self._sensor(Status.ONLOAD):
+                if self._sensor(Status.STAGING):
                     return {"staged": True, "nudged": False, "nudge_s": 0.0}
                 time.sleep(self._poll_s)
             if not nudge:
@@ -427,7 +444,7 @@ class LegacyClearCoreClient:
             try:
                 deadline = time.monotonic() + nudge_timeout_s
                 while time.monotonic() < deadline:
-                    if self._sensor(Status.ONLOAD):
+                    if self._sensor(Status.STAGING):
                         return {"staged": True, "nudged": True,
                                 "nudge_s": time.monotonic() - t0}
                     if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
@@ -454,4 +471,5 @@ class LegacyClearCoreClient:
             work_at_zero=self._sensor(Status.WORK_AT_ZERO),
             offload=self._sensor(Status.OFFLOAD),
             onload=self._sensor(Status.ONLOAD),
+            staging=self._sensor(Status.STAGING),
         )
