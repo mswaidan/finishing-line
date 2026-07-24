@@ -69,8 +69,21 @@ class LegacyTrain:
             return True
         return False
 
+    @property
+    def feed_state(self) -> str:
+        """Commanded Z1 state (hunting / feeding / suspended / off)."""
+        return self._cc.feed_state
+
+    @property
+    def brush_on(self) -> bool:
+        return self._cc.brush_on
+
     def feed_resume(self) -> None:
-        self._cc.set_feed(True)
+        """Resume a suspended hunt — but ONLY if the watch is still alive.
+        A fault/halt in between cancels the watch, and re-lighting the coil
+        with no watch is the known disaster combo."""
+        if self._cc.feed_watch_active:
+            self._cc.set_feed(True)
 
     def entry(self, *, o_occupied: bool) -> dict:
         """Staged enterer rides STAGING -> O, sensor-stopped. Entries ONLY

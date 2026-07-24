@@ -99,14 +99,31 @@ class LegacyController:
 
     def _loop(self) -> None:
         seq = self._seq
+        # A paused loop never calls step(), so nothing polls the Z1 watch —
+        # suspend a live hunt on the pause edge and resume it on the run
+        # edge. Done HERE (not in set_running) because Modbus belongs to
+        # this thread only.
+        feed_paused = False
         while not self._stop.is_set():
             if self._halt_reason is not None:
                 reason, self._halt_reason = self._halt_reason, None
                 self._enabled = False
-                seq.halt_now(reason)
+                seq.halt_now(reason)  # idles belts; a suspended watch dies too
+                feed_paused = False
             if self._enabled and seq.phase != PHASE_FAULTED:
+                if feed_paused:
+                    feed_paused = False
+                    try:
+                        seq._train.feed_resume()  # no-op if the watch is gone
+                    except Exception:
+                        pass
                 self._blocked = seq.step()
             else:
+                if not feed_paused:
+                    try:
+                        feed_paused = seq._train.feed_suspend()
+                    except Exception:
+                        pass
                 seq.bank()  # paused/faulted parts keep drying (§7 heritage)
                 time.sleep(0.1)
             now = time.monotonic()
@@ -235,6 +252,7 @@ class LegacyController:
             },
             "clearcore": {
                 "shutter": "NONE",  # no shutter on the legacy-mod route
+                "feed": getattr(seq._train, "feed_state", None),
                 "fans": {"F1": seq._fan_on(Station.F1), "F2": seq._fan_on(Station.F2)},
                 "sensors": {
                     "F1": bool(sensors.staging) if sensors else None,
@@ -247,6 +265,18 @@ class LegacyController:
                     "in_count": len(seq.queue),
                 },
                 "watchdog_tripped": False,
+                # Raw polled I/O for the HMI diagnostics table. Eyes are
+                # polarity-normalized (True = part present); coils are
+                # command truth (no feedback wire on this route).
+                "io": {
+                    "MAIN BELT": (sensors.server_state == 2) if sensors else None,
+                    "INFEED BELT": getattr(seq._train, "feed_state", None),
+                    "WORK": bool(sensors.work_at_zero) if sensors else None,
+                    "JUNCTION": bool(sensors.onload) if sensors else None,
+                    "STAGING": bool(sensors.staging) if sensors else None,
+                    "OFFLOAD": bool(sensors.offload) if sensors else None,
+                    "BRUSH": getattr(seq._train, "brush_on", None),
+                },
             },
             "config": {
                 "flash_seconds": cfg.flash_seconds,

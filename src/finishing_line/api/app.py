@@ -110,7 +110,10 @@ def create_app(controller: LineController) -> FastAPI:
             while True:
                 await ws.send_json(controller.snapshot())
                 await asyncio.sleep(0.25)
-        except WebSocketDisconnect:
+        except Exception:  # incl. WebSocketDisconnect
+            # A refresh/tab-close can kill the socket mid-send, which raises
+            # transport errors beyond WebSocketDisconnect — all of them just
+            # mean "client gone"; stop streaming, never log-spam.
             pass
 
     return app

@@ -118,6 +118,8 @@ class LegacyClearCoreClient:
         }
         self._request_id = 0
         self._params_pushed = False
+        self._feed_on = False  # last commanded coil state (feed_state)
+        self._brush_on = False
         #: Remaining ONLOAD edges of a feed watch handed over by
         #: transition_move(stop_on_staging) — non-empty means Z1 is running
         #: and feed_tick() owns the cut.
@@ -462,9 +464,26 @@ class LegacyClearCoreClient:
     def set_feed(self, on: bool) -> None:
         """Feed conveyor (coil 107): level-driven, runs while set."""
         self._write_coil(Command.FEED_CONVEYOR, on)
+        self._feed_on = on
+
+    @property
+    def feed_state(self) -> str:
+        """Commanded Z1 state for the HMI: 'hunting' (coil on, persistent
+        watch live), 'feeding' (coil on inside a maneuver's own chain),
+        'suspended' (watch live, coil paused), 'off'. Command truth only —
+        no wire feedback on this route."""
+        if self._feed_phases:
+            return "hunting" if self._feed_on else "suspended"
+        return "feeding" if self._feed_on else "off"
 
     def set_brush(self, on: bool) -> None:
         self._write_coil(Command.BRUSH_ON, on)
+        self._brush_on = on
+
+    @property
+    def brush_on(self) -> bool:
+        """Last commanded brush-coil state (command truth, no feedback)."""
+        return self._brush_on
 
     def staging_present(self) -> bool:
         """The staging eye — legacy v1.1 firmware only (discrete 7, polarity
