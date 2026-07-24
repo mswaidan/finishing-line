@@ -4,11 +4,17 @@ Like the Sander this interleaves UR motion with Z2 belt moves (the O station is
 on Z2), but it is NON-CONTACT: no force mode, the gun (DO5) toggles instead. Two
 product routines, translated verbatim from the legacy program:
 
-  cube (JOB 1, script:3060-3111)    — horizontal. Gun toggled per stroke across
-      three waypoints: a belt sweep at Waypoint_1, then two height sweeps at
-      Waypoint_2 / Waypoint_3.
-  browser (JOB 2, script:2856-2941) — vertical. A base-Z standoff, then the gun
-      held ON through one continuous belt/height raster back to Spray_Base.
+  BOTH products first run the VERTICAL raster (script:2856-2944) — that block
+  is UNCONDITIONAL in the legacy program; only the base-Z standoff inside it
+  is job-gated (JOB 2 gets +0.1 m, cube none). Then:
+
+  cube (JOB 1, + script:3060-3111)  — the waypoint pass at the 45-deg spray
+      TCP: gun toggled per stroke across Waypoint_1 (belt sweep) and
+      Waypoint_2 / Waypoint_3 (height sweeps).
+  browser (JOB 2)                   — the vertical raster alone.
+
+  (The first extraction mislabeled the vertical raster as JOB-2-only, so
+  cubes ran a single pass — caught on the real line 2026-07-26.)
 
 The other JOBs (45, sc3/sc4, job7) are legacy stereocab products outside this
 line's cube+browser scope (CLAUDE.md) and raise.
@@ -68,9 +74,12 @@ class Sprayer:
         return float(product.width_mm - self._cfg.width_inset_mm)
 
     def _spray_cube(self, product: ProductSpec) -> None:
-        """JOB 1 horizontal — gun toggled per stroke (script:3060-3111)."""
+        """JOB 1 — vertical raster first (no standoff for cubes), then the
+        45-deg waypoint pass (script:3060-3111), gun toggled per stroke."""
         cfg, ur, cc = self._cfg, self._ur, self._cc
         pass_mm, step_mm = self._pass_mm(product), float(product.height_mm)
+
+        self._vertical_raster(product, standoff_mm=0.0)
 
         # Stroke 1 — Waypoint_1, belt sweep +pass.
         ur.move_to_named("Waypoint_1")
@@ -94,12 +103,20 @@ class Sprayer:
         ur.set_sprayer(False)
 
     def _spray_vertical(self, product: ProductSpec) -> None:
-        """JOB 2 vertical — standoff, then gun ON through one raster (script:2856-2941)."""
+        """JOB 2 (browser) — the vertical raster with its +Z standoff."""
+        self._vertical_raster(
+            product, standoff_mm=self._cfg.approach_z_m * 1000.0)
+
+    def _vertical_raster(self, product: ProductSpec, *, standoff_mm: float) -> None:
+        """The unconditional legacy 'Spray Vertical' (script:2856-2944):
+        Spray_Base, job-dependent base-Z standoff (0 for cubes), gun ON
+        through one belt/height raster, back to Spray_Base."""
         cfg, ur, cc = self._cfg, self._ur, self._cc
         pass_mm, step_mm = self._pass_mm(product), float(product.height_mm)
 
         ur.move_to_named("Spray_Base")
-        ur.move_base_z_mm(cfg.approach_z_m * 1000.0, a=cfg.approach_a, v=cfg.approach_v)
+        if standoff_mm:
+            ur.move_base_z_mm(standoff_mm, a=cfg.approach_a, v=cfg.approach_v)
         ur.set_sprayer(True)  # gun ON for the whole raster
         cc.move_zone_mm(Zone.Z2, pass_mm)
         cc.wait_zone_ready(Zone.Z2)

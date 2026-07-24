@@ -62,11 +62,25 @@ def _spray(product: ProductSpec) -> list:
 
 
 def test_cube_call_order_and_gun_windows():
-    """Horizontal: gun toggled per stroke over three waypoints; belt −pass
-    overlaps the Waypoint_3 movej. Wrapped in spray/default TCP.
+    """Cube = TWO passes (restored 2026-07-26): the unconditional vertical
+    raster (no standoff for cubes) then the 45-deg waypoint pass with the gun
+    toggled per stroke; belt −pass overlaps the Waypoint_3 movej. Wrapped in
+    spray/default TCP.
     """
     assert _spray(CUBE) == [
         ("ur.use_spray_tcp",),
+        # Pass 1 — the vertical raster, gun ON throughout, no base-Z standoff.
+        ("ur.move_to_named", "Spray_Base"),
+        ("ur.set_sprayer", True),
+        ("cc.move_zone_mm", Zone.Z2, 350.0),
+        ("cc.wait_zone_ready", Zone.Z2),
+        ("ur.move_base_x_mm", -355.0),
+        ("cc.move_zone_mm", Zone.Z2, -350.0),
+        ("cc.wait_zone_ready", Zone.Z2),
+        ("ur.move_base_x_mm", 355.0),
+        ("ur.set_sprayer", False),
+        ("ur.move_to_named", "Spray_Base"),
+        # Pass 2 — the 45-deg waypoint strokes.
         ("ur.move_to_named", "Waypoint_1"),
         ("ur.set_sprayer", True),
         ("cc.move_zone_mm", Zone.Z2, 350.0),
@@ -107,8 +121,9 @@ def test_browser_call_order_gun_continuous():
     ]
 
 
-def test_cube_gun_toggled_thrice_browser_once():
-    assert [c for c in _spray(CUBE) if c == ("ur.set_sprayer", True)] == [("ur.set_sprayer", True)] * 3
+def test_cube_gun_windows_four_browser_one():
+    # Cube: one continuous vertical-raster window + three waypoint strokes.
+    assert [c for c in _spray(CUBE) if c == ("ur.set_sprayer", True)] == [("ur.set_sprayer", True)] * 4
     assert [c for c in _spray(BROWSER) if c == ("ur.set_sprayer", True)] == [("ur.set_sprayer", True)]
 
 
