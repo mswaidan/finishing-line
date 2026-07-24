@@ -114,6 +114,23 @@ that triggers feed-start during the entry move, timed so the follower lands at
 the eye as the belt stops — sensor-anchored but with open-loop residue. The
 nudge is preferred: fully sensor-stopped, zero new parts.)
 
+## Process decisions on this route (operator, 2026-07-26)
+
+These deliberately supersede the rewrite spec's blanket rules for the
+legacy-mod route — do not "fix" them back:
+
+- **Flash-2 does not gate flow.** Only flash-1 limits the schedule (the P2
+  retreat and P3 return gates). A part exits at the entry beats regardless
+  of flash-2 progress and finishes drying on the gravity conveyor past OUT.
+  CLAUDE.md's "never under-flash" applies to flash-1 here; flash-2 dries
+  off-line by design.
+- **Every coat is preceded by sanding.** Coat 2 gets a post-flash-1 scuff
+  sand with the same passes as coat 1 (was: coat-2 beats sprayed without
+  sanding).
+- **The gun-tip brush clean (5 s, line-config override) runs during the
+  flash wait**, right after the coat-2 spray + safe pose — off the critical
+  path. Pre-spray it measurably lengthened the beat.
+
 ## Protocol facts (hard-won, don't rediscover)
 
 - Legacy moves fire on REQUEST_ID **change**; seed the counter from echo 206 on

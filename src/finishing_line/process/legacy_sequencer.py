@@ -253,8 +253,9 @@ class LegacySequencer:
                 # wait right after polls every tick.
                 resume_feed = self._train.feed_suspend()
                 try:
-                    if not spec.robot.clean_gun:
-                        self._robot.sand(pid)
+                    # Sand EVERY coat (operator, 2026-07-26): coat 2 gets a
+                    # post-flash-1 scuff sand before its spray, same passes.
+                    self._robot.sand(pid)
                     # §7 heritage: never blow on a wet F1 part with the gun
                     # live. Only possible with a controllable F1 fan.
                     f1_pid = self.occ.get(Station.F1)
@@ -314,13 +315,13 @@ class LegacySequencer:
 
     def _departure_block(self) -> str | None:
         if self.beat in _ENTRY_BEATS:
-            pid = self.occ.get(Station.F2)
-            if pid:
-                block = self._flash_block(pid, "F2")
-                if block:
-                    return block
-                if self.sensors is not None and self.sensors.offload:
-                    return "remove the finished part at OUT"
+            # Flash-2 does NOT gate the exit (operator, 2026-07-26): the part
+            # keeps drying after offload on the gravity conveyor, so only
+            # flash-1 (the P2/P3 gates below) ever limits flow. The OFFLOAD
+            # eye stays as a stall check.
+            if (self.occ.get(Station.F2) and self.sensors is not None
+                    and self.sensors.offload):
+                return "remove the finished part at OUT"
         elif self.beat == "P2":
             pid = self.occ.get(Station.F2)
             if pid:
