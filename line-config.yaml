@@ -46,11 +46,11 @@ process:
 
   clean_gun:
     # The coat-2 gun-tip brush clean (process/gun_clean.py) — NOT a product
-    # denib. This duration_s is the NOMINAL used for throughput math; the tuned
-    # brush run is cell-config brush_duration_s (30 s).
+    # denib. duration_s is OPERATIVE: it overrides the legacy tuned 30 s
+    # (cell-config brush_duration_s) and also feeds the throughput math.
     enabled: true
-    duration_s: 20.0
-    provenance: assumed
+    duration_s: 5.0     # shortened from legacy 30 s (operator, 2026-07-26)
+    provenance: measured
 
 stations:
   inq_capacity: 4

@@ -81,6 +81,9 @@ class LegacySequencer:
         self.minted = 0
         self._pair = -1
         self._pending_enterer: str | None = None
+        #: Gun clean owed to the current beat, run on the first flash-wait
+        #: tick (hidden inside the departure gate's wait).
+        self._pending_clean = False
         #: Belt travel a starved stage-probe's nudge already caused this beat;
         #: the next blind shuffle subtracts it so stations stay true.
         self._probe_slide_mm = 0.0
@@ -250,9 +253,7 @@ class LegacySequencer:
                 # wait right after polls every tick.
                 resume_feed = self._train.feed_suspend()
                 try:
-                    if spec.robot.clean_gun:
-                        self._robot.clean_gun(pid)
-                    else:
+                    if not spec.robot.clean_gun:
                         self._robot.sand(pid)
                     # §7 heritage: never blow on a wet F1 part with the gun
                     # live. Only possible with a controllable F1 fan.
@@ -271,6 +272,11 @@ class LegacySequencer:
                     if pausing:
                         self._set_f1(True)
                     self._robot.safe_pose()
+                    # Gun clean is DEFERRED into the flash wait (operator,
+                    # 2026-07-26): done here it extends the robot step and
+                    # thus the beat; done while the departure gate ticks it
+                    # hides inside time the beat spends waiting anyway.
+                    self._pending_clean = spec.robot.clean_gun
                 except Exception as exc:  # device failure = fault, belt idled
                     # No feed_resume here: _fault idles everything, and a live
                     # coil with a cancelled watch is the known disaster combo.
@@ -284,6 +290,19 @@ class LegacySequencer:
         return None
 
     def _step_flash(self) -> str | None:
+        if self._pending_clean:
+            # First tick of the flash wait: brush the gun tip NOW, while the
+            # departing part's flash clock runs — off the critical path
+            # whenever the gate wait exceeds the clean (always, at 180 s).
+            self._pending_clean = False
+            resume_feed = self._train.feed_suspend()
+            try:
+                self._robot.clean_gun(self.occ.get(Station.O) or "-")
+                self._robot.safe_pose()
+            except Exception as exc:
+                return self._fault(f"gun clean failed during {self.beat}: {exc}")
+            if resume_feed:
+                self._train.feed_resume()
         self.sensors = self._train.sensors()
         blocked = self._departure_block()
         if blocked:

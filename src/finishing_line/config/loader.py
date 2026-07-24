@@ -298,13 +298,18 @@ def load_legacy_sensor_inversion(path: Path | None = None) -> dict[str, bool]:
 def load_brush_config(path: Path | None = None) -> BrushConfig:
     raw = _load(path or CELL_CONFIG)
     moves, motion, timings = raw["moves"], raw["motion"], raw["timings"]
+    # Brush dwell: line-config clean_gun.duration_s OVERRIDES the legacy
+    # tuned 30 s (cell-config stays untouched archaeology). Decided
+    # 2026-07-26: 5 s cleans the tip fine.
+    override = _load(LINE_CONFIG)["process"].get("clean_gun", {}).get("duration_s")
     return BrushConfig(
         contact_v=float(motion["movel_process"]["v"]),
         retract_off_mm=float(moves["brush_clean"]["retract_off_mm"]),
         retract_a=float(motion["movel_retract_brush"]["a"]),
         retract_v=float(motion["movel_retract_brush"]["v"]),
         settle_before_on_s=float(timings["brush_settle_before_on_s"]),
-        duration_s=float(timings["brush_duration_s"]),
+        duration_s=float(override if override is not None
+                         else timings["brush_duration_s"]),
         settle_after_off_s=float(timings["brush_settle_after_off_s"]),
     )
 
