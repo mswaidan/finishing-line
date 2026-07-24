@@ -45,8 +45,9 @@ class LegacyTrain:
     # ------------------------------------------------------------ maneuvers
 
     def load(self) -> dict:
-        """First part: queue -> O in one run. Feed boards it (cut at first
-        STAGING rising), belt stops on the WORK_AT_ZERO arrival."""
+        """First part: queue -> O in one run. Feed runs with the belt; it cuts
+        only when a FOLLOWER reaches the junction (ONLOAD HI->LO->HI). Belt
+        stops on the WORK_AT_ZERO arrival."""
         return self._record(self._cc.transition_move(
             self._load_mm, stop_on_work_zero=True, feed=True))
 
@@ -57,7 +58,7 @@ class LegacyTrain:
 
     def entry(self, *, o_occupied: bool, feed_assist: bool = False) -> dict:
         """Staged enterer rides eye -> O. feed_assist only if staging failed
-        (boarding cut at first STAGING rising)."""
+        (feed cut by the junction chain, ONLOAD HI->LO->HI)."""
         return self._record(self._cc.transition_move(
             self._pitch_mm, stop_on_work_zero=True,
             o_occupied=o_occupied, feed=feed_assist))

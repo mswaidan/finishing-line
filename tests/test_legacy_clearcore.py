@@ -160,21 +160,108 @@ def test_cap_reached_without_arrival_is_reported_not_raised(rig):
     assert res["arrived"] is False
 
 
-def test_boarding_feed_cuts_on_first_rising_edge(rig):
+def test_feed_cuts_when_follower_reaches_junction(rig):
+    """The Z1 cut rule: ONLOAD HI -> LO -> HI during the transition = part 1
+    crossed, part 2 arrived — feed stops so the follower does not board."""
     fake, cc, poke = rig
-    poke(0.3, "staging", True)  # enterer's nose reaches the eye mid-move
+    poke(0.2, "onload", True)   # part 1's nose at the junction
+    poke(0.4, "onload", False)  # part 1's tail clears
+    poke(0.6, "onload", True)   # part 2's nose arrives -> cut Z1
     res = cc.transition_move(300.0, feed=True)
     assert res["entered"] is True
-    assert fake.coils[107] == 0, "feed must be cut at the FIRST rising edge"
+    assert fake.coils[107] == 0, "feed must be cut on the second rising edge"
+
+
+def test_feed_chain_starts_midway_if_onload_high_at_start(rig):
+    fake, cc, poke = rig
+    fake.set_sensor("onload", True)  # part 1 already on the eye at t=0
+    poke(0.2, "onload", False)       # part 1 clears
+    poke(0.5, "onload", True)        # part 2 arrives -> cut
+    res = cc.transition_move(300.0, feed=True)
+    assert res["entered"] is True
+    assert fake.coils[107] == 0
+    fake.set_sensor("onload", False)
+
+
+def test_staging_stop_parks_z2_at_the_eye(rig):
+    fake, cc, poke = rig
+    poke(0.3, "staging", True)  # part 1 reaches the intake park
+    res = cc.transition_move(300.0, stop_on_staging=True)
+    assert res["arrived"] is True
+    assert fake.holding[100] == 3, "Z2 must be idled by the staging stop"
+    fake.set_sensor("staging", False)
+
+
+def test_feed_left_running_after_staging_park_and_cut_by_feed_tick(rig):
+    """The intake handoff: Z2 parks at staging with nobody behind part 1;
+    Z1 keeps feeding with NO timeout until a follower trips ONLOAD, and the
+    caller's feed_tick() owns that cut."""
+    fake, cc, poke = rig
+    poke(0.15, "onload", True)    # part 1's nose crosses the junction
+    poke(0.3, "onload", False)    # part 1's tail clears
+    poke(0.45, "staging", True)   # part 1 parks -> Z2 stops, chain incomplete
+    res = cc.transition_move(300.0, feed=True, stop_on_staging=True)
+    assert res["arrived"] is True
+    assert res["entered"] is False and res["feed_running"] is True
+    assert fake.coils[107] == 1, "Z1 must be LEFT RUNNING — no follower yet"
+    assert cc.feed_tick() is False, "watch active, follower not there yet"
+    fake.set_sensor("onload", True)  # follower's nose arrives
+    assert cc.feed_tick() is True
+    assert fake.coils[107] == 0, "feed_tick cuts Z1 on the follower's edge"
+    assert cc.feed_tick() is None, "watch consumed"
+    fake.set_sensor("staging", False)
+    fake.set_sensor("onload", False)
+
+
+def test_feed_runs_out_with_move_when_no_follower(rig):
+    fake, cc, poke = rig
+    poke(0.2, "onload", True)   # the only part crosses...
+    poke(0.4, "onload", False)  # ...and clears; nobody behind it
+    res = cc.transition_move(300.0, feed=True)
+    assert res["entered"] is False, "no follower = chain incomplete, not a fault"
+    assert fake.coils[107] == 0, "feed still off once the move ends"
 
 
 def test_stage_feed_only_never_moves_the_belt(rig):
     fake, cc, poke = rig
     poke(0.2, "staging", True)
     st = cc.stage_next(feed_timeout_s=2.0)
-    assert st == {"staged": True, "nudged": False, "nudge_s": 0.0}
+    assert st["staged"] is True and st["nudged"] is False
     assert fake.moves_started == 0, "phase A is feed-only: belt untouched"
-    assert fake.coils[107] == 0
+    # STAGING never cuts Z1: no follower tripped ONLOAD, so the feed is
+    # left running and the watch is handed to feed_tick().
+    assert st["feed_running"] is True and fake.coils[107] == 1
+    fake.set_sensor("onload", True)   # walk all three edges of the hi,lo,hi chain
+    assert cc.feed_tick() is False
+    fake.set_sensor("onload", False)
+    assert cc.feed_tick() is False
+    fake.set_sensor("onload", True)
+    assert cc.feed_tick() is True and fake.coils[107] == 0
+    fake.set_sensor("staging", False)
+    fake.set_sensor("onload", False)
+
+
+def test_stage_with_part_on_onload_cuts_z1_on_lo_hi(rig):
+    """The steady-state stage: the enterer STARTS on the ONLOAD eye, so the
+    junction chain is LO (it leaves) -> HI (next follower arrives) — and the
+    cut fires even though STAGING also fired."""
+    fake, cc, poke = rig
+    fake.set_sensor("onload", True)   # cube 2 resting on the eye at t=0
+    poke(0.2, "onload", False)        # cube 2 crosses onto Z2
+    poke(0.4, "staging", True)        # cube 2 parks at staging
+    poke(0.6, "onload", True)         # cube 3 arrives -> cut Z1
+    st = cc.stage_next(feed_timeout_s=5.0)
+    assert st["staged"] is True
+    # staged at 0.4 returns before the 0.6 poke? No: phase A returns on
+    # STAGING HI — so the chain may be incomplete here; both outcomes are
+    # legal depending on timing. Drain the watch either way:
+    deadline = time.monotonic() + 2.0
+    while fake.coils[107] == 1 and time.monotonic() < deadline:
+        cc.feed_tick()
+        time.sleep(0.01)
+    assert fake.coils[107] == 0, "Z1 cut by the LO->HI chain, not by STAGING"
+    fake.set_sensor("staging", False)
+    fake.set_sensor("onload", False)
 
 
 def test_stage_nudge_finishes_a_stalled_crossing(rig):
@@ -184,7 +271,11 @@ def test_stage_nudge_finishes_a_stalled_crossing(rig):
     assert st["staged"] is True and st["nudged"] is True
     assert st["nudge_s"] > 0
     assert fake.moves_started == 1, "the nudge is a capped belt move"
-    assert fake.holding[100] == 3 and fake.coils[107] == 0, "belt idled, feed off"
+    assert fake.holding[100] == 3, "belt idled after the nudge"
+    assert st["feed_running"] is True and fake.coils[107] == 1, \
+        "no follower tripped ONLOAD: Z1 keeps feeding (no timeout)"
+    cc.set_feed(False)  # test cleanup
+    fake.set_sensor("staging", False)
 
 
 def test_belt_adapter_runs_the_sander_composite(rig):

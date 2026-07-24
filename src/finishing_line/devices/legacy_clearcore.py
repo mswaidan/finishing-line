@@ -118,6 +118,10 @@ class LegacyClearCoreClient:
         }
         self._request_id = 0
         self._params_pushed = False
+        #: Remaining ONLOAD edges of a feed watch handed over by
+        #: transition_move(stop_on_staging) — non-empty means Z1 is running
+        #: and feed_tick() owns the cut.
+        self._feed_phases: list[str] = []
 
     def _sensor(self, addr: int) -> bool:
         """A sensor read normalized to True = part present."""
@@ -260,6 +264,7 @@ class LegacyClearCoreClient:
         nominal_mm: float,
         *,
         stop_on_work_zero: bool = False,
+        stop_on_staging: bool = False,
         o_occupied: bool = False,
         pass_through: bool = False,
         feed: bool = False,
@@ -283,13 +288,22 @@ class LegacyClearCoreClient:
           HI -> LO and then RE-APPROACHES downstream until HI — the legacy
           return-to-zero (script:3191-3206) — so every part rests at O having
           approached from the same side, direction-independent.
-        - feed: BOARDING ASSIST ONLY — the feed runs until the entering part's
-          nose trips the STAGING eye (first RISING edge = fully aboard, since
-          the eye sits ~450 mm downstream of the junction), then cuts. If the
-          eye is already HI at start (enterer pre-staged), the feed never runs.
-          STAGING the next part must happen with the main belt STOPPED
-          (stage_next) — a part pushed across the junction onto a moving belt
-          rides away instead of parking at the eye.
+        - feed: the queue (Z1) belt runs for the WHOLE maneuver by default;
+          the ONLY early cut is the junction chain on ONLOAD (2026-07-25
+          rule): HI (part 1's nose) -> LO (part 1's tail clears) -> HI
+          (part 2's nose arrives) -> feed CUT, so the follower does not board
+          Z2. If ONLOAD is already HI at start, part 1 is the one on the eye
+          and the chain starts mid-way (LO -> HI remaining). 'entered' True =
+          chain completed (follower parked at the junction); False = no
+          follower appeared before the move ended (nothing waiting behind —
+          informational, not a fault).
+        - stop_on_staging: Z2 stops on the STAGING eye's rising edge (the
+          intake park). If the feed chain is still incomplete at that point,
+          Z1 is deliberately LEFT RUNNING with NO timeout — the queue belt
+          feeds continuously until a follower trips ONLOAD. The caller owns
+          the rest of the watch via feed_tick() (nonblocking, one poll per
+          call); 'feed_running' True in the result marks this handoff.
+          Exceptions still cut the feed.
 
         - continuous: run in Move_Continuous instead of a capped distance move —
           for sensor-terminated maneuvers longer than the 16-bit DISTANCE
@@ -297,11 +311,14 @@ class LegacyClearCoreClient:
           stop_on_work_zero (the sensor IS the stop); the deadline is the only
           other bound, and the belt is idled on any failure path.
 
-        Returns {'arrived', 'entered', 'seconds'} (None = not requested;
-        False = requested but not achieved — investigate).
+        Returns {'arrived', 'entered', 'feed_running', 'seconds'} (None = not
+        requested; False = requested but not achieved — investigate).
         """
         if continuous and not stop_on_work_zero:
             raise ValueError("continuous transition requires stop_on_work_zero")
+        if stop_on_work_zero and stop_on_staging:
+            raise ValueError("pick ONE stop sensor: work_zero or staging")
+        self._feed_phases = []  # a new maneuver supersedes any old feed watch
         if feed:
             self.set_feed(True)
         arrived: bool | None = None
@@ -322,13 +339,13 @@ class LegacyClearCoreClient:
                 if o_occupied:
                     wz_phases += ["depart_hi", "depart_lo"]
                 wz_phases += ["arrive_hi"] + (["arrive_lo"] if pass_through else [])
+            if stop_on_staging:
+                arrived = False
+            feed_phases: list[str] = []
             if feed:
-                on_prev = self._sensor(Status.STAGING)
-                if on_prev:  # enterer already aboard (pre-staged) — nothing to board
-                    entered = True
-                    self.set_feed(False)
-                else:
-                    entered = False
+                entered = False
+                feed_phases = (["lo", "hi"] if self._sensor(Status.ONLOAD)
+                               else ["hi", "lo", "hi"])
 
             while True:
                 if time.monotonic() >= deadline:
@@ -343,12 +360,18 @@ class LegacyClearCoreClient:
                         if not wz_phases:  # final edge of the chain: stop here
                             arrived = True
                             self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
-                if feed and not entered:
-                    on = self._sensor(Status.STAGING)
-                    if on and not on_prev:  # first rising edge: aboard — cut NOW
-                        entered = True
-                        self.set_feed(False)
-                    on_prev = on
+                if stop_on_staging and arrived is False:
+                    if self._sensor(Status.STAGING):  # intake park: stop Z2
+                        arrived = True
+                        self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
+                if feed_phases:
+                    on = self._sensor(Status.ONLOAD)
+                    ph = feed_phases[0]
+                    if (ph == "hi" and on) or (ph == "lo" and not on):
+                        feed_phases.pop(0)
+                        if not feed_phases:  # follower at the junction: cut Z1
+                            entered = True
+                            self.set_feed(False)
                 if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
                     break
                 time.sleep(self._poll_s)
@@ -366,7 +389,13 @@ class LegacyClearCoreClient:
                         break
                     time.sleep(self._poll_s)
 
+            # Intake handoff: Z2 parked at staging but no follower yet — hand
+            # the ONLOAD watch to the caller (feed_tick) and leave Z1 running.
+            # NO timeout by design: the queue belt feeds until a part shows.
+            if feed and not entered and stop_on_staging:
+                self._feed_phases = feed_phases
             return {"arrived": arrived, "entered": entered,
+                    "feed_running": bool(self._feed_phases),
                     "seconds": time.monotonic() - t0}
         except BaseException:
             # Deadline, Modbus failure, Ctrl-C — never leave the belt running
@@ -377,8 +406,26 @@ class LegacyClearCoreClient:
                 pass
             raise
         finally:
-            if feed:
+            if feed and not self._feed_phases:
                 self.set_feed(False)  # never leave the queue belt running
+
+    def feed_tick(self) -> bool | None:
+        """One nonblocking poll of a feed watch left running by
+        transition_move(stop_on_staging): advances the ONLOAD chain and cuts
+        Z1 the moment the follower's nose trips the eye. Returns True on the
+        cut (watch complete), False while still waiting, None if no watch is
+        active. NO internal timeout — an empty queue just keeps the feed
+        running, by design; call every tick until True."""
+        if not self._feed_phases:
+            return None
+        on = self._sensor(Status.ONLOAD)
+        ph = self._feed_phases[0]
+        if (ph == "hi" and on) or (ph == "lo" and not on):
+            self._feed_phases.pop(0)
+            if not self._feed_phases:  # follower at the junction: cut Z1
+                self.set_feed(False)
+                return True
+        return False
 
     def move_idle(self) -> None:
         """Move_Idle (script:2083): decel-stop the main conveyor."""
@@ -416,52 +463,84 @@ class LegacyClearCoreClient:
         the static main belt can stall near the end (belt friction once the
         part's weight leaves the feed) — physics, not a fault.
 
-        Phase B — the NUDGE (only if A stalls): main belt + feed together,
-        sensor-stopped on STAGING HI. The mostly-aboard part grips the moving
-        belt (consistent handoff) and parks at the eye. Downstream parts slide
-        by the stall shortfall δ — run staging only at BEAT-END (work done, O
-        part departing next move) where that slide is harmless. δ inflates
-        spacing and shifts the retreat landing by −δ. The 2026-07-25 mount
-        puts the eye at junction+450 ≈ part width (362) + 88 mm of δ-margin —
-        right at the placement rule; watch the reported nudge distance.
+        Phase B — the NUDGE (only if A stalls): Z2 alone, capped, stops on
+        STAGING HI. The mostly-aboard part grips the moving belt (consistent
+        handoff) and parks at the eye. Downstream parts slide by the stall
+        shortfall δ — run staging only at BEAT-END (work done, O part
+        departing next move) where that slide is harmless. δ inflates spacing
+        and shifts the retreat landing by −δ. The 2026-07-25 mount puts the
+        eye at junction+450 ≈ part width (362) + 88 mm of δ-margin — right at
+        the placement rule; watch the reported nudge distance.
 
-        Returns {'staged', 'nudged', 'nudge_s'}.
+        Z1 CUT RULE (2026-07-25): the feed is governed ONLY by the junction
+        chain on ONLOAD — never by STAGING, never by a timeout. The staged
+        part starts ON the eye (chain LO -> HI: it leaves, the next follower
+        arrives) or short of it (HI -> LO -> HI). If the chain is incomplete
+        when this returns, Z1 is LEFT RUNNING and feed_tick() owns the cut —
+        an empty queue keeps feeding until a part shows, by design.
+        Exceptions still cut the feed.
+
+        Returns {'staged', 'nudged', 'nudge_s', 'feed_running'}.
         """
+        self._feed_phases = []
         self.set_feed(True)
+        phases = (["lo", "hi"] if self._sensor(Status.ONLOAD)
+                  else ["hi", "lo", "hi"])
+        entered = False
+
+        def chain_tick() -> None:
+            nonlocal entered
+            if entered:
+                return
+            on = self._sensor(Status.ONLOAD)
+            ph = phases[0]
+            if (ph == "hi" and on) or (ph == "lo" and not on):
+                phases.pop(0)
+                if not phases:  # next follower at the junction: cut Z1
+                    entered = True
+                    self.set_feed(False)
+
+        def result(staged: bool, nudged: bool, nudge_s: float) -> dict:
+            if not entered:
+                self._feed_phases = phases  # hand the watch to feed_tick()
+            return {"staged": staged, "nudged": nudged, "nudge_s": nudge_s,
+                    "feed_running": not entered}
+
         try:
             deadline = time.monotonic() + feed_timeout_s
             while time.monotonic() < deadline:
+                chain_tick()
                 if self._sensor(Status.STAGING):
-                    return {"staged": True, "nudged": False, "nudge_s": 0.0}
+                    return result(True, False, 0.0)
                 time.sleep(self._poll_s)
             if not nudge:
-                return {"staged": False, "nudged": False, "nudge_s": 0.0}
+                return result(False, False, 0.0)
             # Capped DISTANCE move, not continuous: if the PC dies mid-nudge
             # the firmware finishes at most nudge_cap_mm and stops on its own
             # (the legacy firmware has no watchdog — caps are the mitigation).
+            # Z2 only — if the chain already cut Z1, re-running the feed here
+            # would push the follower past the junction.
             t0 = time.monotonic()
             self._start_move(400.0)  # nudge cap: well past any stall shortfall
             try:
                 deadline = time.monotonic() + nudge_timeout_s
                 while time.monotonic() < deadline:
+                    chain_tick()
                     if self._sensor(Status.STAGING):
-                        return {"staged": True, "nudged": True,
-                                "nudge_s": time.monotonic() - t0}
+                        return result(True, True, time.monotonic() - t0)
                     if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
                         break  # cap reached without the eye firing
                     time.sleep(self._poll_s)
-                return {"staged": False, "nudged": True,
-                        "nudge_s": time.monotonic() - t0}
+                return result(False, True, time.monotonic() - t0)
             finally:
                 self.move_idle()  # nudge always ends with the belt stopped
         except BaseException:
             try:
+                self.set_feed(False)
                 self.move_idle()
             except Exception:
                 pass
             raise
-        finally:
-            self.set_feed(False)
 
     # -------------------------------------------------------------- sensing
 
