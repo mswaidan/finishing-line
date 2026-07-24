@@ -5,11 +5,12 @@ operation: on coat-2 beats the gun tip is cleaned against the spray-cleanoff
 brush (legacy coil 108, O_BRUSH) so the second coat sprays clean. Translated
 from the legacy brush routine (script:3122-3164):
 
-  goto Clean_Brush -> contact-detect up into the brush -> back off a few mm ->
-  settle -> BRUSH_ON -> hold ~30 s -> BRUSH_OFF -> settle.
+  goto Clean_Brush -> contact-detect up into the brush -> settle -> BRUSH_ON
+  -> hold duration_s -> BRUSH_OFF -> settle.
 
-No force mode: the tip holds a fixed standoff off the hard-contact point while
-the brush spins. Uses the default (sanding) TCP, matching the legacy set_tcp
+No force mode: the tip stays AT the contact point while the brush spins —
+the legacy back-off standoff was removed 2026-07-26 (operator: tip must
+touch the brush; the bristles supply the compliance). Uses the default (sanding) TCP, matching the legacy set_tcp
 before Clean_Brush. Leaves the arm at the brush; safe_pose retracts it.
 
 The brush hold blocks the executor for ~duration_s (per the RobotDevice
@@ -44,7 +45,8 @@ class GunClean:
         ur.use_default_tcp()  # brush uses the sand/default frame (script:3123)
         ur.move_to_named("Clean_Brush")
         ur.contact_detect_z(speed_ms=cfg.contact_v)  # up into the brush
-        ur.move_base_z_mm(-cfg.retract_off_mm, a=cfg.retract_a, v=cfg.retract_v)  # back off
+        # No back-off (2026-07-26): the tip stays on the contact point;
+        # bristle compliance does the work. cfg.retract_off_mm is unused.
         time.sleep(cfg.settle_before_on_s)
         cc.set_brush(True)
         try:

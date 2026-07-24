@@ -38,14 +38,15 @@ class FakeCC:
 
 
 def test_clean_call_order():
-    """Default (sand) TCP, goto brush, contact up, back off 3 mm, brush on/off."""
+    """Default (sand) TCP, goto brush, contact up, brush on/off — NO back-off
+    after contact (removed 2026-07-26: the tip stays on the brush; bristle
+    compliance does the work)."""
     log: list = []
     GunClean(FakeUR(log), FakeCC(log), CFG).clean()
     assert log == [
         ("ur.use_default_tcp",),
         ("ur.move_to_named", "Clean_Brush"),
         ("ur.contact_detect_z", 0.05),
-        ("ur.move_base_z_mm", -3.0),   # back off the hard-contact point
         ("cc.set_brush", True),
         ("cc.set_brush", False),
     ]
