@@ -318,9 +318,14 @@ class LegacyClearCoreClient:
             raise ValueError("continuous transition requires stop_on_work_zero")
         if stop_on_work_zero and stop_on_staging:
             raise ValueError("pick ONE stop sensor: work_zero or staging")
-        self._feed_phases = []  # a new maneuver supersedes any old feed watch
         if feed:
+            self._feed_phases = []  # a new feed maneuver supersedes any old watch
             self.set_feed(True)
+        # else: a live watch is INHERITED — Z1 keeps hunting while Z2 moves,
+        # and the loop below polls the chain so the follower is cut exactly
+        # at the ONLOAD eye. A part parked nose-at-the-eye is safe under a
+        # moving Z2 (validated 2026-07-25, handoff_test phases 2 and 5); the
+        # disaster mode is only a live COIL with a cancelled watch.
         arrived: bool | None = None
         entered: bool | None = None
         t0 = time.monotonic()
@@ -372,6 +377,8 @@ class LegacyClearCoreClient:
                         if not feed_phases:  # follower at the junction: cut Z1
                             entered = True
                             self.set_feed(False)
+                elif self._feed_phases:
+                    self.feed_tick()  # inherited watch: cut at the follower's edge
                 if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
                     break
                 time.sleep(self._poll_s)
@@ -385,6 +392,8 @@ class LegacyClearCoreClient:
                     if self._sensor(Status.WORK_AT_ZERO):
                         arrived = True
                         self._write_reg_echoed(Command.MOTION_MODE, MODE_IDLE)
+                    if not feed and self._feed_phases:
+                        self.feed_tick()
                     if self._read_input_reg(Status.SERVER_STATE) == STATE_READY:
                         break
                     time.sleep(self._poll_s)
@@ -426,6 +435,17 @@ class LegacyClearCoreClient:
                 self.set_feed(False)
                 return True
         return False
+
+    @property
+    def feed_watch_active(self) -> bool:
+        """True while a persistent Z1 watch is live (feed running, waiting
+        for a follower on ONLOAD)."""
+        return bool(self._feed_phases)
+
+    def feed_stop(self) -> None:
+        """Cut Z1 and cancel any live feed watch (fault/halt path)."""
+        self._feed_phases = []
+        self.set_feed(False)
 
     def move_idle(self) -> None:
         """Move_Idle (script:2083): decel-stop the main conveyor."""

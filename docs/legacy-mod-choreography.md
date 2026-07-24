@@ -86,6 +86,29 @@ harmless. Consequences, all by construction:
 right at the rule; if reported nudges ever exceed ~80 mm, look at the junction
 mechanically or add eye margin.
 
+## The junction rule + skip discipline (2026-07-25, validated by handoff_test)
+
+- **Z1 (feed) is governed ONLY by the junction chain on ONLOAD**: HI (nose)
+  -> LO (tail clears) -> HI (next follower's nose) => cut, so the follower
+  never boards uninvited. If a part rests on the eye at start, the chain
+  begins at LO -> HI. **No timeout**: an empty queue keeps Z1 feeding until a
+  part shows — this IS the continuous-intake behavior; there is no queue
+  sensor and none is needed. The watch persists across driver calls
+  (`feed_tick()`, one nonblocking poll per sequencer step).
+- **Z2 owns arrivals**: staging parks on STAGING HI (`stop_on_staging`),
+  O-arrivals on the WORK_AT_ZERO chains. A live Z1 watch is INHERITED by
+  transitions — the feed keeps hunting while Z2 moves and the transition
+  loop polls the chain, cutting at the follower's ONLOAD edge. Safe because
+  a part parked nose-at-the-eye does not drag under a moving Z2 (phases
+  2/5); the disaster mode is only a live coil with a CANCELLED watch.
+  Blind shuffles (no chain polling) suspend the feed and resume it after.
+- **Entries only from a confirmed staged position.** Not staged at an entry
+  beat = SKIP the beat (hole in the pattern), part stays on Z1; next
+  beat-end staging retries. The feed-assist boarding fallback is gone — it
+  would inflate spacing by ~450 mm and drive the retreat into the junction.
+- Empty-line intake = the same primitives: both belts to STAGING, then a
+  normal staged entry to O.
+
 (Deferred alternative if nudge grip proves inconsistent: a third eye mid-belt
 that triggers feed-start during the entry move, timed so the follower lands at
 the eye as the belt stops — sensor-anchored but with open-loop residue. The

@@ -55,6 +55,13 @@ class LegacyController:
         self._thread: threading.Thread | None = None
         sequencer._on_change = self._mark_dirty
         self._restore()
+        # Startup safety: a crashed run may have left Z1 feeding (the
+        # persistent no-timeout watch) or Z2 mid-move — stop both; the watch
+        # itself is not persisted, the next stage/intake re-arms it.
+        try:
+            sequencer._train.idle()
+        except Exception:
+            pass
 
     # ------------------------------------------------------------ lifecycle
 
@@ -65,10 +72,30 @@ class LegacyController:
         return self
 
     def close(self) -> None:
+        """Shutdown safety: the persistent Z1 watch means the feed can be
+        legitimately running with no step loop left to cut it. Belts stop
+        FIRST and again after the join, and an impatient second Ctrl-C
+        landing mid-join must never skip that (it did, 2026-07-25 — Z1 kept
+        running after the process died)."""
         self._stop.set()
+        self._belts_safe()  # immediately — before any join can be interrupted
         if self._thread is not None:
-            self._thread.join(timeout=10.0)
+            try:
+                self._thread.join(timeout=10.0)
+            except BaseException:
+                pass  # second Ctrl-C: still finish making the line safe
+            finally:
+                # A step in flight when _stop was set may have commanded
+                # motion after the first stop — stop again now it's joined
+                # (or timed out).
+                self._belts_safe()
         self._save()
+
+    def _belts_safe(self) -> None:
+        try:
+            self._seq._train.idle()
+        except Exception:
+            pass
 
     def _loop(self) -> None:
         seq = self._seq
@@ -213,7 +240,9 @@ class LegacyController:
                     "F1": bool(sensors.staging) if sensors else None,
                     "O": bool(sensors.work_at_zero) if sensors else None,
                     "F2": None,  # no eye at F2 on this route
-                    "IN": bool(seq.queue),
+                    # IN = a part physically at the junction (ONLOAD eye),
+                    # i.e. the follower parked there by the Z1 cut rule.
+                    "IN": bool(sensors.onload) if sensors else None,
                     "OUT": bool(sensors.offload) if sensors else None,
                     "in_count": len(seq.queue),
                 },

@@ -38,6 +38,7 @@ class FakeTrain:
         self.offload = False
         self.arrive = True
         self.available = 0  # physical parts at the infeed (the sensors' truth)
+        self.staged = False  # a part parked at the STAGING eye
         self.stage_result = {"staged": True, "nudged": False, "nudge_s": 0.0}
         self.last_spacing_mm = 700.0
 
@@ -46,23 +47,31 @@ class FakeTrain:
 
     mm_per_s = 53.0
 
-    def load(self):
-        self.log.append("load")
-        if self.available > 0 and self.arrive:
+    def intake(self):
+        self.log.append("intake")
+        if not self.staged and self.available > 0 and self.arrive:
             self.available -= 1
-            return {"arrived": True, "entered": True, "seconds": 0.01}
-        return {"arrived": False, "entered": False, "seconds": 0.01}
+            self.staged = True
+        return {"arrived": self.staged, "entered": None,
+                "feed_running": not self.staged, "seconds": 0.01}
 
     def stage(self, **_kw):
         self.log.append("stage")
         res = dict(self.stage_result)
-        res["staged"] = res["staged"] and self.available > 0
-        if res["staged"]:
+        res["staged"] = res["staged"] and (self.staged or self.available > 0)
+        if res["staged"] and not self.staged:
             self.available -= 1
+            self.staged = True
+        res.setdefault("feed_running", False)
         return res
 
-    def entry(self, *, o_occupied, feed_assist=False):
-        self.log.append(f"entry(assist={feed_assist})")
+    def feed_tick(self):
+        return None
+
+    def entry(self, *, o_occupied):
+        self.log.append("entry")
+        if self.arrive:
+            self.staged = False
         return self._res()
 
     def retreat(self, *, o_occupied):
@@ -80,8 +89,12 @@ class FakeTrain:
         self.log.append("idle")
 
     def sensors(self):
+        # onload mirrors the junction rule: whenever parts wait on Z1, the
+        # persistent watch has parked the next one on the ONLOAD eye.
         return SimpleNamespace(server_state=1, work_at_zero=True,
-                               onload=False, staging=False, offload=self.offload)
+                               onload=self.available > 0,
+                               staging=self.staged,
+                               offload=self.offload)
 
 
 def make_seq(fans=ALWAYS_ON, fan_do=None, robot=None, train=None,
@@ -120,9 +133,10 @@ def test_four_part_soak_completes_in_order_never_underflashed():
         ("spray1", "L1"), ("spray1", "T1"), ("spray2", "L1"), ("spray2", "T1"),
         ("spray1", "L2"), ("spray1", "T2"), ("spray2", "L2"), ("spray2", "T2"),
     ]
-    # Idle intake = the both-belts LOAD; the other three enter in-pattern.
-    assert train.log.count("load") == 1
-    assert sum(1 for e in train.log if e.startswith("entry")) == 3
+    # Idle intake stages the first part, then EVERY arrival at O is the same
+    # staged entry (4 total: the idle one + three in-pattern).
+    assert train.log.count("intake") == 1
+    assert train.log.count("entry") == 4
     assert train.log.count("retreat") == 2 and train.log.count("return") == 2
 
 
@@ -238,33 +252,44 @@ def test_intake_product_switch_changes_minted_parts():
     assert str(seq.parts["b0002"].product) == "browser"
 
 
-def test_starved_probe_slide_is_compensated_by_the_shuffle():
-    """The bug from the 3-cube run: a starved probe's nudge slides the belt
-    while the model (rightly) keeps its stations. The following blind shuffle
-    must subtract the measured slide so belt and model agree again."""
+def test_empty_junction_skips_staging_entirely():
+    """Optimization 2026-07-25: the Z1 watch parks every ready follower ON
+    the ONLOAD eye, so a dark eye at an entry beat = nothing to stage. Skip
+    without the feed window or the max-nudge slide — the starved probe is
+    gone entirely."""
     seq, train, _robot = make_seq(parts_available=1)
-    train.stage_result = {"staged": True, "nudged": True, "nudge_s": 2.0}
     run_until(seq, lambda s, b: s.completed == ["c0001"] and s.phase == PHASE_IDLE,
               timeout_s=30.0)
     assert seq.fault is None
-    # A starved probe (available=0) reported a 2.0 s nudge = 106 mm slide;
-    # the very next shuffle must carry reduce=106, and non-probe shuffles 0.
-    reduces = [e for e in train.log if e.startswith("blind")]
-    assert any(e == "blind(reduce=106)" for e in reduces), reduces
-    assert seq._probe_slide_mm == 0.0, "slide must be consumed, never linger"
-
-
-def test_queue_eye_suppresses_starved_probes_entirely():
-    seq, train, _robot = make_seq(parts_available=1)
-    seq._queue_present = lambda: train.available > 0  # simulated infeed eye
-    run_until(seq, lambda s, b: s.completed == ["c0001"] and s.phase == PHASE_IDLE,
-              timeout_s=30.0)
-    # With the eye reporting empty, no stage probe ever ran after intake:
-    # no feed pulses, no nudge hops, and every shuffle moved the full spacing.
-    assert train.log.count("stage") == 0
+    assert train.log.count("stage") == 0, "no staging ever ran on an empty junction"
     assert all(e == "blind(reduce=0)" for e in train.log if e.startswith("blind"))
-    blocked = seq.step()
-    assert "queue eye" in blocked
+
+
+def test_unstaged_part_skips_the_beat_never_enters(monkeypatch):
+    """Decision 2026-07-25: entries only run from a confirmed staged
+    position. A part that fails to stage stays on Z1 (skip, hole in the
+    pattern) and enters on a later beat when staging succeeds."""
+    seq, train, _robot = make_seq(parts_available=2)
+    # First part flows in; the second's staging fails once, then recovers.
+    fails = {"n": 2}
+
+    orig_stage = train.stage
+
+    def flaky_stage(**kw):
+        if fails["n"] > 0:
+            fails["n"] -= 1
+            train.log.append("stage")
+            return {"staged": False, "nudged": False, "nudge_s": 0.0,
+                    "feed_running": True}
+        return orig_stage(**kw)
+
+    train.stage = flaky_stage
+    run_until(seq, lambda s, b: len(s.completed) == 2 and s.phase == PHASE_IDLE,
+              timeout_s=30.0)
+    assert seq.fault is None, "an unstaged part is a skip, never a fault"
+    # Exactly two entries ever ran: the idle intake's and part 2's after its
+    # staging finally succeeded — never one following a failed stage.
+    assert train.log.count("entry") == 2
 
 
 def test_controller_halt_at_boundary_and_snapshot_shape(tmp_path):

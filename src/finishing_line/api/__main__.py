@@ -94,20 +94,7 @@ def _run_legacy(args, cfg) -> None:
         if any(f.controllable for f in fans.values()):
             fan_do = ur.set_digital_out
 
-    from ..config.loader import load_legacy_queue_eye
-
-    # No infeed-queue sensor since 2026-07-25: the ClearCore's DI-6 eye is
-    # now the STAGING eye (discrete 7). With no signal the sequencer falls
-    # back to starved stage-probes + slide compensation.
-    eye = load_legacy_queue_eye()
-    queue_present = None
-    if eye["source"] == "robot_di" and eye["robot_di"] is not None and not args.no_robot:
-        di = eye["robot_di"]
-        queue_present = lambda: not ur.get_digital_in(di)  # F18: present = LOW
-        print(f"queue eye: robot DI{di} (active_low)")
-
-    sequencer = LegacySequencer(train, robot, cfg, fans, fan_do=fan_do,
-                                queue_present=queue_present)
+    sequencer = LegacySequencer(train, robot, cfg, fans, fan_do=fan_do)
     controller = LegacyController(sequencer, cfg, state_file=args.state_file).start()
     if sequencer.fault is not None:
         print(f"RESTORED with parts on the line: {sequencer.fault}")
@@ -115,7 +102,11 @@ def _run_legacy(args, cfg) -> None:
                          for k, v in fans.items())
     print(f"fans: {fan_desc}")
     print(f"HMI: http://localhost:{args.port}")
-    uvicorn.run(create_app(controller), host="0.0.0.0", port=args.port, log_level="warning")
+    try:
+        uvicorn.run(create_app(controller), host="0.0.0.0", port=args.port,
+                    log_level="warning")
+    finally:
+        controller.close()  # Ctrl-C included: stop the loop AND both belts
 
 
 def main() -> None:

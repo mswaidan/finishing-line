@@ -122,18 +122,10 @@ legacy_mode:
   sensor_polarity:
     offload: active_low
     staging: active_low  # the staging eye is an F18 (part present reads LOW)
-
-  # Infeed-queue presence signal. NONE currently exists (2026-07-25): the
-  # DI-6 eye that briefly watched the queue was remounted as the STAGING eye
-  # (main belt, ~450 mm past the junction, discrete 7 — the choreography's
-  # park sensor; ONLOAD went back to the junction itself). With source: none,
-  # starved stage-probes + slide compensation carry intake, as validated
-  # before the eye existed.
-  # source: robot_di = spare UR digital input (needs PNP handling — unused);
-  #         none     = no queue sensor.
-  queue_eye:
-    source: none
-    robot_di: null
+  # No infeed-queue sensor exists (2026-07-25) and none is needed: Z1 is
+  # governed by the junction rule (feed runs — indefinitely if the queue is
+  # empty — and cuts only when a follower trips ONLOAD), so "queue empty"
+  # simply means the feed keeps running until a part shows.
 
 watchdog:
   # Heartbeats both directions (CLAUDE.md, Architecture). The ClearCore-side

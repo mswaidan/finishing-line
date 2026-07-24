@@ -213,6 +213,45 @@ def test_feed_left_running_after_staging_park_and_cut_by_feed_tick(rig):
     fake.set_sensor("onload", False)
 
 
+def test_transition_inherits_the_watch_and_cuts_at_the_edge(rig):
+    """Regressions from the first two sequencer runs (2026-07-25): a
+    transition must neither cancel the watch while leaving the coil on
+    (run 1: followers rode away on a moving Z2, Z1 unstoppable) nor kill the
+    feed outright (run 2: follower stranded mid-Z1, staging skipped forever).
+    It INHERITS the watch: Z1 keeps hunting and cuts at the follower's
+    ONLOAD edge, mid-move."""
+    fake, cc, poke = rig
+    poke(0.15, "onload", True)
+    poke(0.3, "onload", False)
+    poke(0.45, "staging", True)
+    res = cc.transition_move(300.0, feed=True, stop_on_staging=True)
+    assert res["feed_running"] is True and fake.coils[107] == 1
+    poke(0.2, "onload", True)         # follower reaches the junction MID-entry
+    poke(0.5, "work_at_zero", True)
+    res2 = cc.transition_move(300.0, stop_on_work_zero=True)  # the entry
+    assert res2["arrived"] is True
+    assert fake.coils[107] == 0, "Z1 cut by the inherited watch at the edge"
+    assert cc.feed_tick() is None, "watch consumed"
+    for s in ("staging", "work_at_zero", "onload"):
+        fake.set_sensor(s, False)
+
+
+def test_watch_survives_a_transition_when_no_follower_shows(rig):
+    fake, cc, poke = rig
+    poke(0.15, "onload", True)
+    poke(0.3, "onload", False)
+    poke(0.45, "staging", True)
+    cc.transition_move(300.0, feed=True, stop_on_staging=True)
+    assert fake.coils[107] == 1
+    poke(0.2, "work_at_zero", True)
+    cc.transition_move(300.0, stop_on_work_zero=True)  # entry, nobody behind
+    assert fake.coils[107] == 1, "Z1 keeps feeding straight through the move"
+    assert cc.feed_tick() is False, "watch still live afterwards"
+    cc.feed_stop()  # cleanup
+    for s in ("staging", "work_at_zero", "onload"):
+        fake.set_sensor(s, False)
+
+
 def test_feed_runs_out_with_move_when_no_follower(rig):
     fake, cc, poke = rig
     poke(0.2, "onload", True)   # the only part crosses...
